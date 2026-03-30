@@ -2,8 +2,8 @@
 
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { createUser, deleteUser, updateUser } from "./actions";
+import { useState } from "react";
+import { createUser, updateUser } from "./actions";
 import Modal from "@/app/components/Modal";
 import type { RoleRow, UserRow } from "./types";
 
@@ -18,8 +18,6 @@ export function UsersManager({ users, roles }: Props) {
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
-  const [, startDelete] = useTransition();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const roleLabel = (roleId: string | null) => {
     if (!roleId) return "—";
@@ -48,22 +46,6 @@ export function UsersManager({ users, roles }: Props) {
     }
     setEditingId(null);
     router.refresh();
-  }
-
-  function runDelete(id: string) {
-    setRowError(null);
-    setDeletingId(id);
-    startDelete(async () => {
-      const r = await deleteUser(id);
-      if (r.error) {
-        setRowError(r.error);
-        setDeletingId(null);
-        return;
-      }
-      if (editingId === id) setEditingId(null);
-      setDeletingId(null);
-      router.refresh();
-    });
   }
 
   return (
@@ -265,26 +247,16 @@ export function UsersManager({ users, roles }: Props) {
                           {row.updated_at ? formatDate(row.updated_at) : "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRowError(null);
-                                setEditingId(row.id);
-                              }}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => runDelete(row.id)}
-                              disabled={deletingId === row.id}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
-                            >
-                              {deletingId === row.id ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRowError(null);
+                              setEditingId(row.id);
+                            }}
+                            className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                          >
+                            Edit
+                          </button>
                         </td>
                       </>
                     )}

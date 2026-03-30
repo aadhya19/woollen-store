@@ -1,10 +1,9 @@
 import { createSupabase } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
-import  { InventoryManager } from "./inventory-manager";
+import { InventoryManager } from "./inventory-manager";
 import type {
   AgentLookupRow,
-  ProductLookupRow,
   TransportLookupRow,
   UserLookupRow,
   InventoryRow,
@@ -18,47 +17,35 @@ export default async function InventoryPage() {
   const inventoriesQuery = supabase
     .from("Inventory")
     .select(
-      "id, inventory_number, company_name, agent_name, transport_name, waybill_number, transport_charges, date_of_entry, loading_charges, staff_name, location, invoice_number, item_name, billed_quantity, received_quantity, tallying, pricing, stickering, supply, stock_note, created_at, updated_at, invoice_amount, invoice_date, invoice_image_url, invoice_pdf_url, payment_details, payment_mode, payment_status, debit_note, comments",
+      "id, inventory_number, company_name, agent_name, transport_name, waybill_number, transport_charges, date_of_entry, loading_charges, staff_name, location, invoice_number, number_of_parcels, billed_quantity, received_quantity, tallying, pricing, stickering, supply, created_at, updated_at, invoice_amount, invoice_date, invoice_image_url, invoice_pdf_url, payment_details, payment_mode, payment_status, debit_note, comments",
     )
     .order("created_at", { ascending: false });
-  if (session.role === "user") {
-    inventoriesQuery.eq("staff_name", session.userId);
-  }
 
-  const [inventoriesRes, itemsRes, agentsRes, transportsRes, usersRes] =
-    await Promise.all([
-      inventoriesQuery,
-      supabase
-        .from("Products")
-        .select("id, product_name")
-        .order("product_name", { ascending: true }),
-      supabase
-        .from("Agent")
-        .select("id, agent_name")
-        .order("agent_name", { ascending: true }),
-      supabase
-        .from("Transport")
-        .select("id, transport_name")
-        .order("transport_name", { ascending: true }),
-      supabase
-        .from("Users")
-        .select("id, name")
-        .order("name", { ascending: true }),
-    ]);
+  const [inventoriesRes, agentsRes, transportsRes, usersRes] = await Promise.all([
+    inventoriesQuery,
+    supabase
+      .from("Agent")
+      .select("id, agent_name")
+      .order("agent_name", { ascending: true }),
+    supabase
+      .from("Transport")
+      .select("id, transport_name")
+      .order("transport_name", { ascending: true }),
+    supabase
+      .from("Users")
+      .select("id, name")
+      .order("name", { ascending: true }),
+  ]);
 
   const error =
     inventoriesRes.error ??
-    itemsRes.error ??
     agentsRes.error ??
     transportsRes.error ??
     usersRes.error;
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader
-        title="Inventory"
-        description=""
-      />
+      <PageHeader title="Inventory" description="" />
 
       {error ? (
         <div
@@ -71,7 +58,6 @@ export default async function InventoryPage() {
       ) : (
         <InventoryManager
           inventories={(inventoriesRes.data ?? []) as InventoryRow[]}
-          items={(itemsRes.data ?? []) as ProductLookupRow[]}
           agents={(agentsRes.data ?? []) as AgentLookupRow[]}
           transports={(transportsRes.data ?? []) as TransportLookupRow[]}
           users={(usersRes.data ?? []) as UserLookupRow[]}
@@ -82,4 +68,3 @@ export default async function InventoryPage() {
     </div>
   );
 }
-

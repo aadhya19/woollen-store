@@ -56,17 +56,3 @@ export async function updateAgent(formData: FormData): Promise<ActionResult> {
   return { error: null };
 }
 
-export async function deleteAgent(id: string): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
-  if (authError) return { error: authError };
-
-  if (!id) return { error: "Missing agent id" };
-
-  const supabase = createSupabase();
-  const { error } = await supabase.from("Agent").delete().eq("id", id);
-
-  if (error) return { error: mapSupabaseError(error.message) };
-  revalidatePath("/agents");
-  return { error: null };
-}
-

@@ -85,23 +85,6 @@ export async function updateUser(formData: FormData): Promise<ActionResult> {
   return { error: null };
 }
 
-export async function deleteUser(id: string): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
-  if (authError) return { error: authError };
-
-  if (!id) {
-    return { error: "Missing user id" };
-  }
-  const supabase = createSupabase();
-  const { error } = await supabase.from("Users").delete().eq("id", id);
-
-  if (error) {
-    return { error: mapSupabaseError(error.message) };
-  }
-  revalidatePath("/users");
-  return { error: null };
-}
-
 function emptyToNull(value: FormDataEntryValue | null) {
   const s = value?.toString().trim();
   return s ? s : null;

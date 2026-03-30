@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  applyTokenCookies,
+  applyAccessTokenCookies,
   COOKIE_OAUTH_STATE,
   exchangeCodeForTokens,
 } from "@/lib/microsoft-delegated";
+import { saveOneDriveRefreshToken } from "@/lib/one-drive-token-store";
 
 export async function GET(request: NextRequest) {
   const base = request.nextUrl.origin;
@@ -49,9 +50,9 @@ export async function GET(request: NextRequest) {
       secure: process.env.NODE_ENV === "production",
       maxAge: 0,
     });
-    applyTokenCookies(res.cookies, {
+    await saveOneDriveRefreshToken(tokens.refresh_token);
+    applyAccessTokenCookies(res.cookies, {
       access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
       expires_in: tokens.expires_in,
     });
     return res;

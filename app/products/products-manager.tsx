@@ -2,24 +2,21 @@
 
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { createProduct, deleteProduct, updateProduct } from "./actions";
+import { useState } from "react";
+import { createProduct, updateProduct } from "./actions";
 import Modal from "@/app/components/Modal";
-import type { BrandOptionRow, ProductRow } from "./types";
+import type { ProductRow } from "./types";
 
 type Props = {
   products: ProductRow[];
-  brands: BrandOptionRow[];
 };
 
-export function ProductsManager({ products, brands }: Props) {
+export function ProductsManager({ products }: Props) {
   const router = useRouter();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
-  const [, startDelete] = useTransition();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function runCreate(formData: FormData) {
     setFormError(null);
@@ -43,28 +40,6 @@ export function ProductsManager({ products, brands }: Props) {
     setEditingId(null);
     router.refresh();
   }
-
-  function runDelete(id: string) {
-    setRowError(null);
-    setDeletingId(id);
-    startDelete(async () => {
-      const r = await deleteProduct(id);
-      if (r.error) {
-        setRowError(r.error);
-        setDeletingId(null);
-        return;
-      }
-      if (editingId === id) setEditingId(null);
-      setDeletingId(null);
-      router.refresh();
-    });
-  }
-
-  const brandLabel = (brandId: string | null) => {
-    if (!brandId) return "—";
-    const b = brands.find((x) => x.id === brandId);
-    return b?.brand_name?.trim() ? b.brand_name : b?.id ?? brandId;
-  };
 
   return (
     <div className="space-y-4">
@@ -91,7 +66,7 @@ export function ProductsManager({ products, brands }: Props) {
         onClose={() => setIsCreateOpen(false)}
         title="Add product"
         description="Create a new product."
-        panelClassName="max-w-5xl"
+        panelClassName="max-w-lg"
       >
         {formError ? (
           <p
@@ -102,7 +77,7 @@ export function ProductsManager({ products, brands }: Props) {
           </p>
         ) : null}
         <form id="create-product-form" action={runCreate} className="mt-4">
-          <ProductFormFields mode="create" brands={brands} />
+          <ProductFormFields mode="create" />
         </form>
       </Modal>
 
@@ -120,14 +95,10 @@ export function ProductsManager({ products, brands }: Props) {
           <p className="p-8 text-center text-sm text-zinc-500">No products yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-left text-sm">
+            <table className="w-full min-w-[600px] text-left text-sm">
               <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                 <tr>
                   <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Description</th>
-                  <th className="px-4 py-3">Brand</th>
-                  <th className="px-4 py-3">Style</th>
-                  <th className="px-4 py-3">Fabric</th>
                   <th className="px-4 py-3">Created</th>
                   <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -135,15 +106,12 @@ export function ProductsManager({ products, brands }: Props) {
               </thead>
               <tbody className="divide-y divide-[#245236]/15">
                 {products.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-[#FEED01]/20"
-                  >
+                  <tr key={row.id} className="hover:bg-[#FEED01]/20">
                     {editingId === row.id ? (
-                      <td colSpan={8} className="px-4 py-3">
+                      <td colSpan={4} className="px-4 py-3">
                         <form action={runUpdate} className="space-y-3">
                           <input type="hidden" name="id" value={row.id} />
-                          <ProductFormFields mode="edit" values={row} brands={brands} />
+                          <ProductFormFields mode="edit" values={row} />
                           <div className="flex gap-2">
                             <SubmitButton
                               loadingLabel="Saving..."
@@ -169,20 +137,6 @@ export function ProductsManager({ products, brands }: Props) {
                         <td className="px-4 py-3 font-medium text-[#245236]">
                           {row.product_name ?? "—"}
                         </td>
-                        <td className="max-w-[260px] px-4 py-3 text-[#245236]/80">
-                          <span className="line-clamp-2">
-                            {row.product_description ?? "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {brandLabel(row.brand_name)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.style ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.fabric ?? "—"}
-                        </td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
                           {formatDate(row.created_at)}
                         </td>
@@ -190,26 +144,16 @@ export function ProductsManager({ products, brands }: Props) {
                           {row.updated_at ? formatDate(row.updated_at) : "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setRowError(null);
-                                setEditingId(row.id);
-                              }}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => runDelete(row.id)}
-                              disabled={deletingId === row.id}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
-                            >
-                              {deletingId === row.id ? "Deleting..." : "Delete"}
-                            </button>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRowError(null);
+                              setEditingId(row.id);
+                            }}
+                            className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                          >
+                            Edit
+                          </button>
                         </td>
                       </>
                     )}
@@ -244,15 +188,11 @@ function SubmitButton({
 function ProductFormFields({
   mode,
   values,
-  brands,
 }: {
   mode: "create" | "edit";
   values?: ProductRow;
-  brands: BrandOptionRow[];
 }) {
   const v = values;
-  const selectClass =
-    "rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
@@ -265,52 +205,7 @@ function ProductFormFields({
           defaultValue={v?.product_name ?? ""}
           className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
           placeholder="Name"
-        />
-      </label>
-
-      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
-        Brand
-        <select name="brand_name" defaultValue={v?.brand_name ?? ""} className={selectClass}>
-          <option value="">No brand</option>
-          {brands.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.brand_name?.trim() ? b.brand_name : b.id}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
-        Style
-        <input
-          name="style"
-          type="text"
-          autoComplete="off"
-          defaultValue={v?.style ?? ""}
-          className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
-          placeholder="Style"
-        />
-      </label>
-
-      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
-        Fabric
-        <input
-          name="fabric"
-          type="text"
-          autoComplete="off"
-          defaultValue={v?.fabric ?? ""}
-          className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
-          placeholder="Fabric"
-        />
-      </label>
-
-      <label className="flex min-w-[280px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
-        Description
-        <textarea
-          name="product_description"
-          defaultValue={v?.product_description ?? ""}
-          className="min-h-[86px] resize-y rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
-          placeholder="Description…"
+          required
         />
       </label>
 

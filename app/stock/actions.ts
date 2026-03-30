@@ -3,12 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { createSupabase } from "@/lib/supabase";
 import { getAuthSession, requireActionRole } from "@/lib/auth";
-import {
-  duplicateProductMessage,
-  normalizeProductField,
-  tuplesEqual,
-  type ProductTuple,
-} from "@/lib/product-tuple";
 
 export type ActionResult = { error: string | null };
 
@@ -52,170 +46,54 @@ function mapSupabaseError(message: string) {
   if (m.includes("stock_product_fkey")) {
     return `${message} product must reference an existing row in Products.`;
   }
+  if (m.includes("stock_style_fkey")) {
+    return `${message} style must reference an existing row in Style.`;
+  }
+  if (m.includes("stock_fabric_fkey")) {
+    return `${message} Fabric must reference an existing row in Fabric.`;
+  }
   if (
     (m.includes("duplicate key") || m.includes("unique constraint")) &&
     m.includes("stock")
   ) {
-    return `${message} Stock has a unique constraint involving product and/or brand — each combination may appear only once.`;
+    return `${message} Stock has a unique constraint — adjust fields so the row is unique.`;
   }
   return message;
 }
 
-type StockFks = {
+type StockRefs = {
   brand_name: string | null;
   product: string | null;
+  style: string | null;
+  Fabric: string | null;
 };
 
-const DRAFT_NEW = "__new__";
-
-function draftPick(
-  formData: FormData,
-  selectName: string,
-  customName: string,
-): string | null {
-  const sel = formData.get(selectName)?.toString() ?? "";
-  if (sel === DRAFT_NEW) return emptyToNull(formData.get(customName));
-  if (sel === "") return null;
-  return emptyToNull(sel);
+function emptyRefs(): StockRefs {
+  return { brand_name: null, product: null, style: null, Fabric: null };
 }
 
-function parseProductDraftFromForm(formData: FormData): ProductTuple {
-  return {
-    product_name: normalizeProductField(
-      draftPick(formData, "draft_product_name", "draft_product_name_custom"),
-    ),
-    product_description: normalizeProductField(
-      draftPick(formData, "draft_product_description", "draft_product_description_custom"),
-    ),
-    style: normalizeProductField(draftPick(formData, "draft_style", "draft_style_custom")),
-    fabric: normalizeProductField(draftPick(formData, "draft_fabric", "draft_fabric_custom")),
-  };
-}
-
-async function findProductIdByTuple(
-  supabase: ReturnType<typeof createSupabase>,
-  brandId: string,
-  tuple: ProductTuple,
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("Products")
-    .select("id, product_name, product_description, style, fabric")
-    .eq("brand_name", brandId);
-  if (error || !data?.length) return null;
-  for (const row of data) {
-    const r = row as {
-      id: string;
-      product_name: string | null;
-      product_description: string | null;
-      style: string | null;
-      fabric: string | null;
-    };
-    if (
-      tuplesEqual(tuple, {
-        product_name: r.product_name,
-        product_description: r.product_description,
-        style: r.style,
-        fabric: r.fabric,
-      })
-    ) {
-      return r.id;
-    }
-  }
-  return null;
-}
-
-async function resolveOrCreateProductForStock(
-  supabase: ReturnType<typeof createSupabase>,
-  brandId: string,
-  tuple: ProductTuple,
-): Promise<{ productId: string | null; error: string | null }> {
-  if (!tuple.product_name) {
-    return { productId: null, error: "Product name is required (choose or enter a name)." };
-  }
-
-  const existingId = await findProductIdByTuple(supabase, brandId, tuple);
-  if (existingId) return { productId: existingId, error: null };
-
-  const { data: inserted, error } = await supabase
-    .from("Products")
-    .insert({
-      brand_name: brandId,
-      product_name: tuple.product_name,
-      product_description: tuple.product_description,
-      style: tuple.style,
-      fabric: tuple.fabric,
-    })
-    .select("id")
-    .maybeSingle();
-
-  if (error) {
-    const em = error.message.toLowerCase();
-    if (em.includes("duplicate") || em.includes("unique")) {
-      return { productId: null, error: duplicateProductMessage() };
-    }
-    return { productId: null, error: error.message };
-  }
-
-  const id = (inserted as { id?: string } | null)?.id ?? null;
-  if (!id) return { productId: null, error: "Could not create product." };
-  revalidatePath("/products");
-  return { productId: id, error: null };
-}
-
-async function parseStockFksFromForm(
-  supabase: ReturnType<typeof createSupabase>,
-  formData: FormData,
-): Promise<{ fks: StockFks; error: string | null }> {
+function parseStockRefsFromForm(formData: FormData): {
+  refs: StockRefs;
+  error: string | null;
+} {
   const locked = formData.get("stock_product_locked")?.toString() === "1";
-  const productDirect = emptyToNull(formData.get("product_id"));
-
-  if (locked) {
-    if (!productDirect) {
-      return { fks: emptyFks(), error: "Missing product reference." };
-    }
-    let brand_name = emptyToNull(formData.get("brand_name"));
-    if (!brand_name) {
-      const { data, error } = await supabase
-        .from("Products")
-        .select("brand_name")
-        .eq("id", productDirect)
-        .maybeSingle();
-      if (error) return { fks: emptyFks(), error: mapSupabaseError(error.message) };
-      brand_name = (data?.brand_name as string | null) ?? null;
-    }
-    return {
-      fks: { brand_name, product: productDirect },
-      error: null,
-    };
-  }
-
   const brand_name = emptyToNull(formData.get("brand_name"));
+  const product = locked
+    ? emptyToNull(formData.get("product_id"))
+    : emptyToNull(formData.get("product"));
+  const style = emptyToNull(formData.get("style"));
+  const Fabric = emptyToNull(formData.get("Fabric"));
+
   if (!brand_name) {
-    return { fks: emptyFks(), error: "Select a brand first." };
+    return { refs: emptyRefs(), error: "Select a brand." };
+  }
+  if (!product) {
+    return { refs: { brand_name, product: null, style: null, Fabric: null }, error: "Select a product." };
   }
 
-  const tuple = parseProductDraftFromForm(formData);
-  const { productId, error } = await resolveOrCreateProductForStock(
-    supabase,
-    brand_name,
-    tuple,
-  );
-  if (error) return { fks: emptyFks(), error };
-  if (!productId) return { fks: emptyFks(), error: "Could not resolve product." };
-
   return {
-    fks: {
-      brand_name,
-      product: productId,
-    },
+    refs: { brand_name, product, style, Fabric },
     error: null,
-  };
-}
-
-function emptyFks(): StockFks {
-  return {
-    brand_name: null,
-    product: null,
   };
 }
 
@@ -244,14 +122,17 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
   const { n: pieces, error: piecesErr } = parseOptionalInt(formData.get("pieces"));
   if (piecesErr) return { error: piecesErr };
 
-  const supabase = createSupabase();
-  const { fks, error: fkErr } = await parseStockFksFromForm(supabase, formData);
-  if (fkErr) return { error: fkErr };
+  const { refs, error: refErr } = parseStockRefsFromForm(formData);
+  if (refErr) return { error: refErr };
 
+  const supabase = createSupabase();
   const { error } = await supabase.from("Stock").insert({
     stock_number,
     inventory_number,
-    ...fks,
+    brand_name: refs.brand_name,
+    product: refs.product,
+    style: refs.style,
+    Fabric: refs.Fabric,
     HSN_code,
     GST_group,
     cost_price,
@@ -266,7 +147,7 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
   return { error: null };
 }
 
-type StockParsed = StockFks & {
+type StockParsed = StockRefs & {
   stock_number: string | null;
   inventory_number: string | null;
   HSN_code: string | null;
@@ -301,6 +182,10 @@ function mergeStockForRestrictedUser(
     product: stockStrEmpty(g("product") as string | null)
       ? next.product
       : (g("product") as string | null),
+    style: stockStrEmpty(g("style") as string | null) ? next.style : (g("style") as string | null),
+    Fabric: stockStrEmpty(g("Fabric") as string | null)
+      ? next.Fabric
+      : (g("Fabric") as string | null),
     HSN_code: stockStrEmpty(g("HSN_code") as string | null)
       ? next.HSN_code
       : (g("HSN_code") as string | null),
@@ -351,14 +236,13 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
   const { n: pieces, error: piecesErr } = parseOptionalInt(formData.get("pieces"));
   if (piecesErr) return { error: piecesErr };
 
-  const supabase = createSupabase();
-  const { fks, error: fkErr } = await parseStockFksFromForm(supabase, formData);
-  if (fkErr) return { error: fkErr };
+  const { refs, error: refErr } = parseStockRefsFromForm(formData);
+  if (refErr) return { error: refErr };
 
   const parsed: StockParsed = {
     stock_number,
     inventory_number,
-    ...fks,
+    ...refs,
     HSN_code,
     GST_group,
     size,
@@ -367,6 +251,8 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
     mrp,
     pieces,
   };
+
+  const supabase = createSupabase();
 
   if (isAdmin) {
     const { error } = await supabase
@@ -385,7 +271,7 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
   const { data: existing, error: fetchErr } = await supabase
     .from("Stock")
     .select(
-      "stock_number, inventory_number, brand_name, product, HSN_code, GST_group, cost_price, selling_price, mrp, pieces, size",
+      "stock_number, inventory_number, brand_name, product, style, Fabric, HSN_code, GST_group, cost_price, selling_price, mrp, pieces, size",
     )
     .eq("id", id)
     .maybeSingle();

@@ -2,7 +2,7 @@ import { createSupabase } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
 import { ProductsManager } from "./products-manager";
-import type { BrandOptionRow, ProductRow } from "./types";
+import type { ProductRow } from "./types";
 
 export const dynamic = "force-dynamic";
 
@@ -10,27 +10,16 @@ export default async function ProductsPage() {
   await requireAuth(["admin"]);
   const supabase = createSupabase();
 
-  const [productsRes, brandsRes] = await Promise.all([
-    supabase
-      .from("Products")
-      .select(
-        "id, product_name, product_description, style, fabric, brand_name, created_at, updated_at",
-      )
-      .order("product_name", { ascending: true, nullsFirst: false }),
-    supabase
-      .from("Brand")
-      .select("id, brand_name")
-      .order("brand_name", { ascending: true, nullsFirst: false }),
-  ]);
+  const productsRes = await supabase
+    .from("Products")
+    .select("id, product_name, created_at, updated_at")
+    .order("product_name", { ascending: true, nullsFirst: false });
 
-  const error = productsRes.error ?? brandsRes.error;
+  const error = productsRes.error;
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader
-        title="Products"
-        description=""
-      />
+      <PageHeader title="Products" description="" />
 
       {error ? (
         <div
@@ -41,10 +30,7 @@ export default async function ProductsPage() {
           <p className="mt-1 opacity-90">{error.message}</p>
         </div>
       ) : (
-        <ProductsManager
-          products={(productsRes.data ?? []) as ProductRow[]}
-          brands={(brandsRes.data ?? []) as BrandOptionRow[]}
-        />
+        <ProductsManager products={(productsRes.data ?? []) as ProductRow[]} />
       )}
     </div>
   );

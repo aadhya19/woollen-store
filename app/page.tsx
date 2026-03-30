@@ -12,6 +12,8 @@ export default async function Home() {
           { href: "/inventory", label: "Inventory" },
           { href: "/brands", label: "Brands" },
           { href: "/products", label: "Products" },
+          { href: "/style", label: "Style" },
+          { href: "/fabric", label: "Fabric" },
           { href: "/stock", label: "Stock" },
           { href: "/transports", label: "Transports" },
         ]

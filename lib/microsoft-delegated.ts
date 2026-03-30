@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
 
+import {
+  getOneDriveRefreshToken,
+  saveOneDriveRefreshToken,
+} from "@/lib/one-drive-token-store";
+
 /** Cookies from `await cookies()` or `NextResponse.cookies` */
 export type MutableCookieJar = {
   get: (name: string) => { value: string } | undefined;
@@ -80,7 +85,6 @@ async function postToken(body: URLSearchParams): Promise<TokenResponse> {
     cache: "no-store",
   });
   const json = (await res.json()) as TokenResponse;
-  console.log("token response",json);
   if (!res.ok || json.error) {
     const msg =
       json.error_description ?? json.error ?? "Token request failed";
@@ -116,21 +120,11 @@ export function createOAuthState() {
   return randomBytes(24).toString("base64url");
 }
 
-export function applyTokenCookies(
+/** Short-lived Graph access token (+ expiry) in httpOnly cookies. Refresh token lives in `"One Drive"` only. */
+export function applyAccessTokenCookies(
   cookieJar: MutableCookieJar,
-  tokens: {
-    access_token: string;
-    refresh_token?: string;
-    expires_in: number;
-    existingRefreshToken?: string;
-  },
+  tokens: { access_token: string; expires_in: number },
 ) {
-  const refresh =
-    tokens.refresh_token ?? tokens.existingRefreshToken ?? undefined;
-  if (!refresh) {
-    throw new Error("No refresh token returned; ensure scope includes offline_access.");
-  }
-
   const maxAccess = Math.max(60, tokens.expires_in);
   const accessExpiresAt = Date.now() + maxAccess * 1000;
 
@@ -142,27 +136,49 @@ export function applyTokenCookies(
     ...cookieBaseOptions(),
     maxAge: maxAccess,
   });
-  cookieJar.set(COOKIE_REFRESH, refresh, {
+  cookieJar.set(COOKIE_REFRESH, "", {
     ...cookieBaseOptions(),
-    maxAge: 60 * 60 * 24 * 90,
+    maxAge: 0,
   });
 }
 
 /**
  * Returns a valid Graph access token, refreshing when close to expiry.
- * Mutates cookies via `cookieJar.set` (Route Handler response or Server Action).
+ * Mutates cookies via `cookieJar.set` (access token only). Refresh token is loaded from `"One Drive"`.
  */
 export async function getValidMicrosoftAccessToken(
   cookieJar: MutableCookieJar,
 ): Promise<string | null> {
   const access = cookieJar.get(COOKIE_ACCESS)?.value;
-  const refresh = cookieJar.get(COOKIE_REFRESH)?.value;
   const expRaw = cookieJar.get(COOKIE_EXPIRES)?.value;
   const exp = expRaw ? Number(expRaw) : 0;
 
   const refreshSkewMs = 5 * 60 * 1000;
   if (access && exp && Date.now() < exp - refreshSkewMs) {
     return access;
+  }
+
+  let refresh: string | null = null;
+  try {
+    refresh = await getOneDriveRefreshToken();
+  } catch {
+    refresh = null;
+  }
+
+  if (!refresh) {
+    const legacy = cookieJar.get(COOKIE_REFRESH)?.value?.trim();
+    if (legacy) {
+      try {
+        await saveOneDriveRefreshToken(legacy);
+        refresh = legacy;
+        cookieJar.set(COOKIE_REFRESH, "", {
+          ...cookieBaseOptions(),
+          maxAge: 0,
+        });
+      } catch {
+        refresh = legacy;
+      }
+    }
   }
 
   if (!refresh) return null;
@@ -172,11 +188,16 @@ export async function getValidMicrosoftAccessToken(
     if (!json.access_token || !json.expires_in) {
       return null;
     }
-    applyTokenCookies(cookieJar, {
+    if (json.refresh_token) {
+      try {
+        await saveOneDriveRefreshToken(json.refresh_token);
+      } catch {
+        // access token still usable; reconnect may be required if rotation was missed
+      }
+    }
+    applyAccessTokenCookies(cookieJar, {
       access_token: json.access_token,
-      refresh_token: json.refresh_token,
       expires_in: json.expires_in,
-      existingRefreshToken: refresh,
     });
     return json.access_token;
   } catch {

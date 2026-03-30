@@ -5,18 +5,25 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { createStock, deleteStock, updateStock } from "./actions";
 import Modal from "@/app/components/Modal";
-import type { BrandOption, InventoryStockContext, ProductOption, StockRow } from "./types";
+import type {
+  BrandOption,
+  FabricOption,
+  InventoryStockContext,
+  ProductOption,
+  StockRow,
+  StyleOption,
+} from "./types";
 
 type Props = {
   stock: StockRow[];
   products: ProductOption[];
   brands: BrandOption[];
+  styles: StyleOption[];
+  fabrics: FabricOption[];
   inventoryForStock: InventoryStockContext[];
   canManage: boolean;
   allowRestrictedEdit?: boolean;
 };
-
-const DRAFT_NEW_SENTINEL = "__new__";
 
 function cloneFormData(source: FormData): FormData {
   const fd = new FormData();
@@ -26,36 +33,26 @@ function cloneFormData(source: FormData): FormData {
   return fd;
 }
 
-function draftDisplayFromForm(
-  fd: FormData,
-  selectName: string,
-  customName: string,
-): string {
-  const sel = fd.get(selectName)?.toString() ?? "";
-  if (sel === DRAFT_NEW_SENTINEL) {
-    const c = fd.get(customName)?.toString().trim() ?? "";
-    return c || "—";
-  }
-  if (!sel.trim()) return "—";
-  return sel.trim();
-}
-
 function buildCreateStockSummary(
   fd: FormData,
   brands: BrandOption[],
+  products: ProductOption[],
+  styles: StyleOption[],
+  fabrics: FabricOption[],
 ): { label: string; value: string }[] {
   const brandId = fd.get("brand_name")?.toString().trim() ?? "";
+  const productId = fd.get("product")?.toString().trim() ?? "";
+  const styleId = fd.get("style")?.toString().trim() ?? "";
+  const fabricId = fd.get("Fabric")?.toString().trim() ?? "";
+
   const brandName =
     brands.find((b) => b.id === brandId)?.brand_name?.trim() || brandId || "—";
-
-  const productName = draftDisplayFromForm(fd, "draft_product_name", "draft_product_name_custom");
-  const productDesc = draftDisplayFromForm(
-    fd,
-    "draft_product_description",
-    "draft_product_description_custom",
-  );
-  const style = draftDisplayFromForm(fd, "draft_style", "draft_style_custom");
-  const fabric = draftDisplayFromForm(fd, "draft_fabric", "draft_fabric_custom");
+  const productName =
+    products.find((p) => p.id === productId)?.product_name?.trim() || productId || "—";
+  const styleName =
+    styles.find((s) => s.id === styleId)?.style_name?.trim() || styleId || "—";
+  const fabricName =
+    fabrics.find((f) => f.id === fabricId)?.fabric_name?.trim() || fabricId || "—";
 
   const emptyToDash = (v: FormDataEntryValue | null) => {
     const s = v?.toString().trim();
@@ -64,10 +61,9 @@ function buildCreateStockSummary(
 
   return [
     { label: "Brand", value: brandName },
-    { label: "Product name", value: productName },
-    { label: "Product description", value: productDesc },
-    { label: "Style", value: style },
-    { label: "Fabric", value: fabric },
+    { label: "Product", value: productName },
+    { label: "Style", value: styleName },
+    { label: "Fabric", value: fabricName },
     { label: "Stock number", value: emptyToDash(fd.get("stock_number")) },
     { label: "Inventory number", value: emptyToDash(fd.get("inventory_number")) },
     { label: "Size", value: emptyToDash(fd.get("size")) },
@@ -84,6 +80,8 @@ export function StockManager({
   stock,
   products,
   brands,
+  styles,
+  fabrics,
   inventoryForStock,
   canManage,
   allowRestrictedEdit = false,
@@ -110,10 +108,20 @@ export function StockManager({
     [products],
   );
 
+  const styleById = useMemo(
+    () => new Map(styles.map((s) => [s.id, s] as const)),
+    [styles],
+  );
+
+  const fabricById = useMemo(
+    () => new Map(fabrics.map((f) => [f.id, f] as const)),
+    [fabrics],
+  );
+
   const brandLabel = (brandId: string | null | undefined) => {
     if (!brandId?.trim()) return "—";
-    const p = products.find((x) => x.brand_id === brandId);
-    if (p?.brand_label?.trim()) return p.brand_label;
+    const b = brands.find((x) => x.id === brandId);
+    if (b?.brand_name?.trim()) return b.brand_name;
     return brandId;
   };
 
@@ -122,7 +130,7 @@ export function StockManager({
     if (!pid?.trim()) return "—";
     const p = productById.get(pid);
     if (!p) return pid;
-    return `${p.product_name ?? "Unnamed"} (${p.brand_label ?? "No brand"})`;
+    return p.product_name?.trim() || "Unnamed";
   };
 
   const searchPrefix = searchedInventoryNumber.trim();
@@ -186,17 +194,17 @@ export function StockManager({
     const fd = new FormData(form);
     const brand = fd.get("brand_name")?.toString().trim();
     if (!brand) {
-      setFormError("Select a brand first.");
+      setFormError("Select a brand.");
       return;
     }
-    const name = draftDisplayFromForm(fd, "draft_product_name", "draft_product_name_custom");
-    if (name === "—") {
-      setFormError("Product name is required (choose or enter a name).");
+    const product = fd.get("product")?.toString().trim();
+    if (!product) {
+      setFormError("Select a product.");
       return;
     }
     setFormError(null);
     setPendingCreateFormData(cloneFormData(fd));
-    setCreateConfirmSummary(buildCreateStockSummary(fd, brands));
+    setCreateConfirmSummary(buildCreateStockSummary(fd, brands, products, styles, fabrics));
     setCreateConfirmOpen(true);
   }
 
@@ -252,40 +260,36 @@ export function StockManager({
   function handleExportExcel() {
     if (filteredStock.length === 0) return;
 
-    /** Aligns with ItemMaster-style sheet: description / style / fabric from Products via `product` FK. */
     const columns = [
       "Stock No",
-      "Item Description",
       "Product",
       "Brand",
+      "Style",
+      "Fabric",
       "HSN Code",
       "GST Group",
       "Cost Price",
       "Selling Price",
       "Retail Price",
-      "STYLE",
-      "Fabric/ Yarn",
       "Size",
     ];
 
     const csvRows = filteredStock.map((row) => {
       const p = productById.get(row.product ?? "");
       const productName = p?.product_name?.trim() || productRowLabel(row);
-      const desc = p?.product_description?.trim() ?? "";
-      const style = p?.style?.trim() ?? "";
-      const fabric = p?.fabric?.trim() ?? "";
+      const style = styleById.get(row.style ?? "")?.style_name?.trim() ?? "";
+      const fabric = fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() ?? "";
       return [
         row.stock_number,
-        desc,
         productName,
         brandLabel(row.brand_name),
+        style,
+        fabric,
         row.HSN_code,
         row.GST_group,
         row.cost_price,
         row.selling_price,
         row.mrp,
-        style,
-        fabric,
         row.size,
       ].map(toCsvCell);
     });
@@ -392,6 +396,9 @@ export function StockManager({
                 mode="create"
                 products={products}
                 brands={brands}
+                styles={styles}
+                fabrics={fabrics}
+                inventoryChoices={inventoryForStock}
                 lockedInventoryNumber={selectedInventory.inventory_number}
               />
             </form>
@@ -408,7 +415,7 @@ export function StockManager({
           setCreateConfirmSummary(null);
         }}
         title="Confirm creation"
-        description="Are you sure you want to create this stock row with the product details below? If this name, description, style, and fabric combination is new for the brand, a product will be created automatically."
+        description="Confirm the stock row below before it is saved."
         panelClassName="max-w-lg"
         backdropClassName="z-[60]"
       >
@@ -481,6 +488,9 @@ export function StockManager({
               values={editingRow}
               products={products}
               brands={brands}
+              styles={styles}
+              fabrics={fabrics}
+              inventoryChoices={inventoryForStock}
               restrictEditToEmptyFields={allowRestrictedEdit && !canManage}
             />
             <div className="flex gap-2">
@@ -623,6 +633,18 @@ export function StockManager({
                           <p className="text-xs text-[#245236]/70">Brand</p>
                           <p className="text-[#245236]/85">{brandLabel(row.brand_name)}</p>
                         </div>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Style</p>
+                          <p className="text-[#245236]/85">
+                            {styleById.get(row.style ?? "")?.style_name?.trim() || "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Fabric</p>
+                          <p className="text-[#245236]/85">
+                            {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
+                          </p>
+                        </div>
                         <div className="col-span-2">
                           <p className="text-xs text-[#245236]/70">Pricing</p>
                           <p className="text-[#245236]/85">
@@ -675,13 +697,15 @@ export function StockManager({
                 </div>
 
                 <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[960px] text-left text-sm">
+                  <table className="w-full min-w-[1120px] text-left text-sm">
                   <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                     <tr>
                       <th className="px-4 py-3">Stock #</th>
                       <th className="px-4 py-3">Inventory #</th>
-                      <th className="px-4 py-3">Product name</th>
+                      <th className="px-4 py-3">Product</th>
                       <th className="px-4 py-3">Brand</th>
+                      <th className="px-4 py-3">Style</th>
+                      <th className="px-4 py-3">Fabric</th>
                       <th className="px-4 py-3">Pricing</th>
                       <th className="px-4 py-3">Created</th>
                       <th className="px-4 py-3">Updated</th>
@@ -707,6 +731,12 @@ export function StockManager({
                           </td>
                           <td className="px-4 py-3 text-[#245236]/80">
                             {brandLabel(row.brand_name)}
+                          </td>
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            {styleById.get(row.style ?? "")?.style_name?.trim() || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
                           </td>
                           <td className="px-4 py-3 text-[#245236]/80">
                             C: {formatNumber(row.cost_price)} / S:{" "}
@@ -815,97 +845,28 @@ function stkHasNum(n: number | null | undefined) {
   return n != null;
 }
 
-function productOptionLabel(p: ProductOption) {
-  return `${p.product_name ?? "Unnamed"} (${p.brand_label ?? "No brand"})`;
-}
+const STOCK_SIZE_OPTIONS = [
+  "XXS",
+  "XS",
+  "S",
+  "M",
+  "L",
+  "XL",
+  "XXL",
+  "XXXL",
+] as const;
 
-const DRAFT_NEW = "__new__";
-
-/** One entry per distinct non-empty string (no duplicate labels in the dropdown). */
-function uniqueSortedValues(
-  brandProducts: ProductOption[],
-  key: "product_name" | "product_description" | "style" | "fabric",
-): string[] {
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const p of brandProducts) {
-    const s = (p[key]?.trim() ?? "");
-    if (s === "") continue;
-    if (seen.has(s)) continue;
-    seen.add(s);
-    out.push(s);
+function inventoryDisplayLabel(
+  num: string | null | undefined,
+  choices: InventoryStockContext[],
+): string {
+  const n = num?.trim();
+  if (!n) return "—";
+  const c = choices.find((x) => x.inventory_number === n);
+  if (c) {
+    return `${c.inventory_number}${c.company_name?.trim() ? ` — ${c.company_name.trim()}` : ""}`;
   }
-  out.sort((a, b) => a.localeCompare(b));
-  return out;
-}
-
-function initDraftSelect(
-  raw: string | null | undefined,
-  options: string[],
-): { sel: string; custom: string } {
-  const t = raw?.trim() ?? "";
-  if (!t) return { sel: "", custom: "" };
-  if (options.includes(t)) return { sel: t, custom: "" };
-  return { sel: DRAFT_NEW, custom: t };
-}
-
-function DraftComboSelect({
-  label,
-  options,
-  value,
-  onValueChange,
-  customValue,
-  onCustomChange,
-  disabled,
-  selectName,
-  customName,
-  selectClass,
-  placeholder,
-}: {
-  label: string;
-  options: string[];
-  value: string;
-  onValueChange: (next: string) => void;
-  customValue: string;
-  onCustomChange: (next: string) => void;
-  disabled?: boolean;
-  selectName: string;
-  customName: string;
-  selectClass: string;
-  placeholder?: string;
-}) {
-  const showCustom = value === DRAFT_NEW;
-  return (
-    <div className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
-      {label}
-      <select
-        name={selectName}
-        value={value}
-        disabled={disabled}
-        onChange={(e) => onValueChange(e.target.value)}
-        className={selectClass}
-      >
-        <option value="">{placeholder ?? "—"}</option>
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-        <option value={DRAFT_NEW}>New…</option>
-      </select>
-      {showCustom ? (
-        <input
-          name={customName}
-          type="text"
-          value={customValue}
-          onChange={(e) => onCustomChange(e.target.value)}
-          autoComplete="off"
-          placeholder="Type value"
-          className="mt-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
-        />
-      ) : null}
-    </div>
-  );
+  return n;
 }
 
 function StockFormFields({
@@ -913,6 +874,9 @@ function StockFormFields({
   values,
   products,
   brands,
+  styles,
+  fabrics,
+  inventoryChoices,
   lockedInventoryNumber,
   restrictEditToEmptyFields = false,
 }: {
@@ -920,6 +884,9 @@ function StockFormFields({
   values?: StockRow;
   products: ProductOption[];
   brands: BrandOption[];
+  styles: StyleOption[];
+  fabrics: FabricOption[];
+  inventoryChoices: InventoryStockContext[];
   lockedInventoryNumber?: string | null;
   restrictEditToEmptyFields?: boolean;
 }) {
@@ -929,102 +896,28 @@ function StockFormFields({
 
   const brandLocked = Boolean(ro && stkHasStr(v?.brand_name));
   const productLocked = Boolean(ro && stkHasStr(v?.product));
+  const styleLocked = Boolean(ro && stkHasStr(v?.style));
+  const fabricLocked = Boolean(ro && stkHasStr(v?.Fabric));
 
   const [brandId, setBrandId] = useState(v?.brand_name ?? "");
-  const [draftName, setDraftName] = useState("");
-  const [draftNameCustom, setDraftNameCustom] = useState("");
-  const [draftDesc, setDraftDesc] = useState("");
-  const [draftDescCustom, setDraftDescCustom] = useState("");
-  const [draftStyle, setDraftStyle] = useState("");
-  const [draftStyleCustom, setDraftStyleCustom] = useState("");
-  const [draftFabric, setDraftFabric] = useState("");
-  const [draftFabricCustom, setDraftFabricCustom] = useState("");
 
-  const filterBrandId = brandLocked ? (v?.brand_name ?? "") : brandId;
-  const productsForBrand = useMemo(() => {
-    if (!filterBrandId.trim()) return [];
-    return products.filter((p) => p.brand_id === filterBrandId);
-  }, [products, filterBrandId]);
-
-  const nameOptions = useMemo(
-    () => uniqueSortedValues(productsForBrand, "product_name"),
-    [productsForBrand],
-  );
-  const descOptions = useMemo(
-    () => uniqueSortedValues(productsForBrand, "product_description"),
-    [productsForBrand],
-  );
-  const styleOptions = useMemo(
-    () => uniqueSortedValues(productsForBrand, "style"),
-    [productsForBrand],
-  );
-  const fabricOptions = useMemo(
-    () => uniqueSortedValues(productsForBrand, "fabric"),
-    [productsForBrand],
+  const sortedProducts = useMemo(
+    () =>
+      [...products].sort((a, b) =>
+        (a.product_name ?? "").localeCompare(b.product_name ?? "", undefined, {
+          sensitivity: "base",
+        }),
+      ),
+    [products],
   );
 
   useEffect(() => {
     if (v == null) {
       setBrandId("");
-      setDraftName("");
-      setDraftNameCustom("");
-      setDraftDesc("");
-      setDraftDescCustom("");
-      setDraftStyle("");
-      setDraftStyleCustom("");
-      setDraftFabric("");
-      setDraftFabricCustom("");
       return;
     }
     setBrandId(v.brand_name ?? "");
-    const list =
-      v.brand_name?.trim() ?
-        products.filter((p) => p.brand_id === v.brand_name)
-      : [];
-    const p = v.product ? products.find((x) => x.id === v.product) : undefined;
-    const nOpts = uniqueSortedValues(list, "product_name");
-    const dOpts = uniqueSortedValues(list, "product_description");
-    const sOpts = uniqueSortedValues(list, "style");
-    const fOpts = uniqueSortedValues(list, "fabric");
-    const n = initDraftSelect(p?.product_name, nOpts);
-    const d = initDraftSelect(p?.product_description, dOpts);
-    const s = initDraftSelect(p?.style, sOpts);
-    const f = initDraftSelect(p?.fabric, fOpts);
-    setDraftName(n.sel);
-    setDraftNameCustom(n.custom);
-    setDraftDesc(d.sel);
-    setDraftDescCustom(d.custom);
-    setDraftStyle(s.sel);
-    setDraftStyleCustom(s.custom);
-    setDraftFabric(f.sel);
-    setDraftFabricCustom(f.custom);
-  }, [v?.id, v?.brand_name, v?.product, products]);
-
-  useEffect(() => {
-    if (v != null) return;
-    setDraftName("");
-    setDraftNameCustom("");
-    setDraftDesc("");
-    setDraftDescCustom("");
-    setDraftStyle("");
-    setDraftStyleCustom("");
-    setDraftFabric("");
-    setDraftFabricCustom("");
-  }, [brandId, v]);
-
-  function clearProductDrafts() {
-    setDraftName("");
-    setDraftNameCustom("");
-    setDraftDesc("");
-    setDraftDescCustom("");
-    setDraftStyle("");
-    setDraftStyleCustom("");
-    setDraftFabric("");
-    setDraftFabricCustom("");
-  }
-
-  const hasBrand = filterBrandId.trim() !== "";
-  const showProductDrafts = hasBrand && !productLocked;
+  }, [v?.id, v?.brand_name]);
 
   const selectClass =
     "rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2";
@@ -1039,6 +932,20 @@ function StockFormFields({
     ? brands.find((b) => b.id === v.brand_name)?.brand_name?.trim() ||
       v.brand_name
     : "—";
+
+  const styleReadonlyLabel = v?.style
+    ? styles.find((s) => s.id === v.style)?.style_name?.trim() || v.style
+    : "—";
+
+  const fabricReadonlyLabel = v?.Fabric
+    ? fabrics.find((f) => f.id === v.Fabric)?.fabric_name?.trim() || v.Fabric
+    : "—";
+
+  const sizeRawTrimmed = v?.size?.trim() ?? "";
+  const sizeUpper = sizeRawTrimmed ? sizeRawTrimmed.toUpperCase() : "";
+  const sizeInCatalog =
+    Boolean(sizeUpper) && (STOCK_SIZE_OPTIONS as readonly string[]).includes(sizeUpper);
+  const sizeSelectDefault = !sizeRawTrimmed ? "" : sizeInCatalog ? sizeUpper : sizeRawTrimmed;
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -1059,15 +966,41 @@ function StockFormFields({
           readOnly={ro && stkHasStr(v?.stock_number)}
         />
         {inventoryLocked ? (
-          <ReadonlyFormField label="Inventory number" value={lockedInventoryNumber!} />
-        ) : (
-          <FormInput
-            name="inventory_number"
-            label="Inventory number"
-            value={v?.inventory_number}
-            placeholder="ITRY-001"
-            readOnly={ro && stkHasStr(v?.inventory_number)}
+          <ReadonlyFormField
+            label="Inventory"
+            value={inventoryDisplayLabel(lockedInventoryNumber, inventoryChoices)}
           />
+        ) : ro && stkHasStr(v?.inventory_number) ? (
+          <>
+            <input type="hidden" name="inventory_number" value={v?.inventory_number ?? ""} />
+            <ReadonlyFormField
+              label="Inventory"
+              value={inventoryDisplayLabel(v?.inventory_number, inventoryChoices)}
+            />
+          </>
+        ) : (
+          <label className="flex min-w-[260px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
+            Inventory
+            <select
+              name="inventory_number"
+              className={selectClass}
+              defaultValue={v?.inventory_number ?? ""}
+              required
+            >
+              <option value="">Select inventory</option>
+              {inventoryChoices.map((inv) => (
+                <option key={inv.inventory_number} value={inv.inventory_number}>
+                  {inventoryDisplayLabel(inv.inventory_number, [inv])}
+                </option>
+              ))}
+              {v?.inventory_number?.trim() &&
+              !inventoryChoices.some((c) => c.inventory_number === v.inventory_number?.trim()) ? (
+                <option value={v.inventory_number.trim()}>
+                  {v.inventory_number.trim()} (not in list)
+                </option>
+              ) : null}
+            </select>
+          </label>
         )}
 
         <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
@@ -1081,11 +1014,7 @@ function StockFormFields({
             <select
               name="brand_name"
               value={brandId}
-              onChange={(e) => {
-                const next = e.target.value;
-                setBrandId(next);
-                if (v != null && !brandLocked) clearProductDrafts();
-              }}
+              onChange={(e) => setBrandId(e.target.value)}
               className={selectClass}
               required={!productLocked}
             >
@@ -1106,72 +1035,86 @@ function StockFormFields({
             {!brandLocked ? (
               <input type="hidden" name="brand_name" value={v?.brand_name ?? ""} />
             ) : null}
-            <ReadonlyFormField label="Product name" value={productReadonlyLabel} />
-            <ReadonlyFormField
-              label="Product description"
-              value={lockedProduct?.product_description?.trim() || "—"}
-            />
-            <ReadonlyFormField label="Style" value={lockedProduct?.style?.trim() || "—"} />
-            <ReadonlyFormField label="Fabric" value={lockedProduct?.fabric?.trim() || "—"} />
+            <ReadonlyFormField label="Product" value={productReadonlyLabel} />
           </>
-        ) : null}
+        ) : (
+          <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
+            Product
+            <select
+              name="product"
+              className={selectClass}
+              defaultValue={v?.product ?? ""}
+              required
+            >
+              <option value="">Select product</option>
+              {sortedProducts.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.product_name?.trim() ? p.product_name : p.id}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
-        {showProductDrafts ? (
-          <>
-            <DraftComboSelect
-              label="Product name"
-              options={nameOptions}
-              value={draftName}
-              onValueChange={setDraftName}
-              customValue={draftNameCustom}
-              onCustomChange={setDraftNameCustom}
-              selectName="draft_product_name"
-              customName="draft_product_name_custom"
-              selectClass={selectClass}
-              placeholder="Select name"
-            />
-            <DraftComboSelect
-              label="Product description"
-              options={descOptions}
-              value={draftDesc}
-              onValueChange={setDraftDesc}
-              customValue={draftDescCustom}
-              onCustomChange={setDraftDescCustom}
-              selectName="draft_product_description"
-              customName="draft_product_description_custom"
-              selectClass={selectClass}
-            />
-            <DraftComboSelect
-              label="Style"
-              options={styleOptions}
-              value={draftStyle}
-              onValueChange={setDraftStyle}
-              customValue={draftStyleCustom}
-              onCustomChange={setDraftStyleCustom}
-              selectName="draft_style"
-              customName="draft_style_custom"
-              selectClass={selectClass}
-            />
-            <DraftComboSelect
-              label="Fabric"
-              options={fabricOptions}
-              value={draftFabric}
-              onValueChange={setDraftFabric}
-              customValue={draftFabricCustom}
-              onCustomChange={setDraftFabricCustom}
-              selectName="draft_fabric"
-              customName="draft_fabric_custom"
-              selectClass={selectClass}
-            />
-          </>
-        ) : !productLocked ? (
-          <p className="w-full text-xs text-[#245236]/70">
-            Select a brand to choose product name, description, style, and fabric. If this combination is new, a
-            product row will be created automatically.
-          </p>
-        ) : null}
+        <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
+          Style
+          {styleLocked ? (
+            <>
+              <input type="hidden" name="style" value={v?.style ?? ""} />
+              <div className={readOnlySelectClass}>{styleReadonlyLabel}</div>
+            </>
+          ) : (
+            <select name="style" className={selectClass} defaultValue={v?.style ?? ""}>
+              <option value="">—</option>
+              {styles.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.style_name?.trim() ? s.style_name : s.id}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
 
-        <FormInput name="size" label="Size" value={v?.size} placeholder="M" readOnly={ro && stkHasStr(v?.size)} />
+        <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
+          Fabric
+          {fabricLocked ? (
+            <>
+              <input type="hidden" name="Fabric" value={v?.Fabric ?? ""} />
+              <div className={readOnlySelectClass}>{fabricReadonlyLabel}</div>
+            </>
+          ) : (
+            <select name="Fabric" className={selectClass} defaultValue={v?.Fabric ?? ""}>
+              <option value="">—</option>
+              {fabrics.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.fabric_name?.trim() ? f.fabric_name : f.id}
+                </option>
+              ))}
+            </select>
+          )}
+        </label>
+
+        <label className="flex min-w-[240px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
+          Size
+          {ro && stkHasStr(v?.size) ? (
+            <>
+              <input type="hidden" name="size" value={v?.size ?? ""} />
+              <div className={readOnlySelectClass}>{v?.size ?? "—"}</div>
+            </>
+          ) : (
+            <select name="size" className={selectClass} defaultValue={sizeSelectDefault}>
+              <option value="">—</option>
+              {STOCK_SIZE_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+              {sizeRawTrimmed && !sizeInCatalog ? (
+                <option value={sizeRawTrimmed}>{sizeRawTrimmed} (custom)</option>
+              ) : null}
+            </select>
+          )}
+        </label>
         <FormInput
           name="pieces"
           label="Pieces"

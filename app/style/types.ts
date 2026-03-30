@@ -1,6 +1,6 @@
-export type ProductRow = {
+export type StyleRow = {
   id: string;
-  product_name: string | null;
+  style_name: string | null;
   created_at: string;
   updated_at: string | null;
 };

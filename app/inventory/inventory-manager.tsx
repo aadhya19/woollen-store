@@ -2,24 +2,18 @@
 
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import {
-  createInventory,
-  deleteInventory,
-  updateInventory,
-} from "./actions";
+import { useState } from "react";
+import { createInventory, updateInventory } from "./actions";
 import Modal from "@/app/components/Modal";
 import type {
   AgentLookupRow,
   InventoryRow,
-  ProductLookupRow,
   TransportLookupRow,
   UserLookupRow,
 } from "./types";
 
 type Props = {
   inventories: InventoryRow[];
-  items: ProductLookupRow[];
   agents: AgentLookupRow[];
   transports: TransportLookupRow[];
   users: UserLookupRow[];
@@ -49,8 +43,8 @@ function buildCreateInventorySummary(
     agentLabel: (id: string | null) => string;
     transportLabel: (id: string | null) => string;
     userLabel: (id: string | null) => string;
-    itemLabel: (id: string | null) => string;
   },
+  includePaymentFields: boolean,
 ): { label: string; value: string }[] {
   const idOrNull = (key: string) => {
     const s = fd.get(key)?.toString().trim();
@@ -59,9 +53,8 @@ function buildCreateInventorySummary(
   const agentId = idOrNull("agent_name");
   const transportId = idOrNull("transport_name");
   const staffId = idOrNull("staff_name");
-  const itemId = idOrNull("item_name");
 
-  return [
+  const base: { label: string; value: string }[] = [
     { label: "Inventory number", value: fdCell(fd.get("inventory_number")) },
     { label: "Company name", value: fdCell(fd.get("company_name")) },
     { label: "Agent", value: agentId ? lookups.agentLabel(agentId) : "—" },
@@ -73,29 +66,31 @@ function buildCreateInventorySummary(
     { label: "Staff", value: staffId ? lookups.userLabel(staffId) : "—" },
     { label: "Location", value: fdCell(fd.get("location")) },
     { label: "Invoice number", value: fdCell(fd.get("invoice_number")) },
-    { label: "Item", value: itemId ? lookups.itemLabel(itemId) : "—" },
+    { label: "Number of parcels", value: fdCell(fd.get("number_of_parcels")) },
     { label: "Billed quantity", value: fdCell(fd.get("billed_quantity")) },
     { label: "Received quantity", value: fdCell(fd.get("received_quantity")) },
     { label: "Tallying", value: fdCell(fd.get("tallying")) },
     { label: "Pricing", value: fdCell(fd.get("pricing")) },
     { label: "Stickering", value: fdCell(fd.get("stickering")) },
     { label: "Supply", value: fdCell(fd.get("supply")) },
-    { label: "Stock note", value: fdCell(fd.get("stock_note")) },
     { label: "Invoice amount", value: fdCell(fd.get("invoice_amount")) },
     { label: "Invoice date", value: fdCell(fd.get("invoice_date")) },
     { label: "Invoice image (file)", value: fdCell(fd.get("invoice_image_file")) },
     { label: "Invoice PDF (file)", value: fdCell(fd.get("invoice_pdf_file")) },
+    { label: "Comments", value: fdCell(fd.get("comments")) },
+  ];
+  if (!includePaymentFields) return base;
+  return [
+    ...base,
     { label: "Payment details", value: fdCell(fd.get("payment_details")) },
     { label: "Payment mode", value: fdCell(fd.get("payment_mode")) },
     { label: "Payment status", value: fdCell(fd.get("payment_status")) },
     { label: "Debit note", value: fdCell(fd.get("debit_note")) },
-    { label: "Comments", value: fdCell(fd.get("comments")) },
   ];
 }
 
 export function InventoryManager({
   inventories,
-  items,
   agents,
   transports,
   users,
@@ -108,7 +103,10 @@ export function InventoryManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [listSearch, setListSearch] = useState("");
-  const [, startDelete] = useTransition();
+  const [adminPaymentStatusFilter, setAdminPaymentStatusFilter] = useState("");
+  const [adminDebitNoteFilter, setAdminDebitNoteFilter] = useState<
+    "all" | "present" | "missing"
+  >("all");
   const [createConfirmOpen, setCreateConfirmOpen] = useState(false);
   const [pendingCreateFormData, setPendingCreateFormData] = useState<FormData | null>(null);
   const [createConfirmSummary, setCreateConfirmSummary] = useState<
@@ -139,12 +137,6 @@ export function InventoryManager({
     return u?.name?.trim() ? u.name : u?.id ?? userId;
   };
 
-  const itemLabel = (itemId: string | null) => {
-    if (!itemId) return "—";
-    const it = items.find((x) => x.id === itemId);
-    return it?.product_name?.trim() ? it.product_name : it?.id ?? itemId;
-  };
-
   function closeCreateModal() {
     setIsCreateOpen(false);
     setCreateConfirmOpen(false);
@@ -163,8 +155,7 @@ export function InventoryManager({
         agentLabel,
         transportLabel,
         userLabel,
-        itemLabel,
-      }),
+      }, canManage),
     );
     setCreateConfirmOpen(true);
   }
@@ -202,19 +193,6 @@ export function InventoryManager({
     router.refresh();
   }
 
-  function runDelete(id: string) {
-    setRowError(null);
-    startDelete(async () => {
-      const r = await deleteInventory(id);
-      if (r.error) {
-        setRowError(r.error);
-        return;
-      }
-      if (editingId === id) setEditingId(null);
-      router.refresh();
-    });
-  }
-
   const listSearchLower = listSearch.trim().toLowerCase();
 
   const filteredInventories =
@@ -225,9 +203,105 @@ export function InventoryManager({
             agentLabel,
             transportLabel,
             userLabel,
-            itemLabel,
+            includePaymentFields: canManage,
           }),
         );
+
+  const filteredByAdminControls = !canManage
+    ? filteredInventories
+    : filteredInventories.filter((row) => {
+        if (adminPaymentStatusFilter) {
+          const status = (row.payment_status ?? "").trim();
+          if (status !== adminPaymentStatusFilter) return false;
+        }
+        if (adminDebitNoteFilter === "present" && !String(row.debit_note ?? "").trim()) {
+          return false;
+        }
+        if (adminDebitNoteFilter === "missing" && String(row.debit_note ?? "").trim()) {
+          return false;
+        }
+        return true;
+      });
+
+  function handleExportExcel() {
+    if (filteredByAdminControls.length === 0) return;
+
+    const columns = [
+      "Id",
+      "Inventory number",
+      "Company name",
+      "Agent name",
+      "Transport name",
+      "Waybill number",
+      "Transport charges",
+      "Date of entry",
+      "Loading charges",
+      "Staff name",
+      "Location",
+      "Invoice number",
+      "Number of parcels",
+      "Billed quantity",
+      "Received quantity",
+      "Tallying",
+      "Pricing",
+      "Stickering",
+      "Supply",
+      "Invoice amount",
+      "Invoice date",
+      "Invoice image URL",
+      "Invoice PDF URL",
+      "Payment details",
+      "Payment mode",
+      "Payment status",
+      "Debit note",
+      "Comments",
+    ];
+
+    const csvRows = filteredByAdminControls.map((row) =>
+      [
+        row.id,
+        row.inventory_number,
+        row.company_name,
+        row.agent_name,
+        row.transport_name,
+        row.waybill_number,
+        row.transport_charges,
+        row.date_of_entry,
+        row.loading_charges,
+        row.staff_name,
+        row.location,
+        row.invoice_number,
+        row.number_of_parcels,
+        row.billed_quantity,
+        row.received_quantity,
+        row.tallying,
+        row.pricing,
+        row.stickering,
+        row.supply,
+        row.invoice_amount,
+        row.invoice_date,
+        row.invoice_image_url,
+        row.invoice_pdf_url,
+        row.payment_details,
+        row.payment_mode,
+        row.payment_status,
+        row.debit_note,
+        row.comments,
+      ].map(toCsvCell),
+    );
+
+    const csv = [columns.map(toCsvCell), ...csvRows].map((line) => line.join(",")).join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const fileName = `inventory-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="space-y-4">
@@ -236,7 +310,7 @@ export function InventoryManager({
           {inventories.length === 0
             ? "No inventory rows yet."
             : listSearchLower
-              ? `Showing ${filteredInventories.length} of ${inventories.length} row${inventories.length === 1 ? "" : "s"} matching your search.`
+              ? `Showing ${filteredByAdminControls.length} of ${inventories.length} row${inventories.length === 1 ? "" : "s"} matching your filters.`
               : `${inventories.length} inventory row${inventories.length === 1 ? "" : "s"} in the list.`}
         </p>
         <button
@@ -280,7 +354,7 @@ export function InventoryManager({
             agents={agents}
             transports={transports}
             users={users}
-            items={items}
+            canManage={canManage}
           />
         </form>
       </Modal>
@@ -378,7 +452,7 @@ export function InventoryManager({
               agents={agents}
               transports={transports}
               users={users}
-              items={items}
+              canManage={canManage}
               restrictEditToEmptyFields={allowRestrictedEdit && !canManage}
             />
             <div className="flex flex-wrap gap-2 pt-2">
@@ -419,20 +493,61 @@ export function InventoryManager({
                 value={listSearch}
                 onChange={(e) => setListSearch(e.target.value)}
                 autoComplete="off"
-                placeholder="Search across inventory #, company, transport, agent, waybill, dates, staff, location, invoice, item, payment…"
+                placeholder="Search across inventory #, company, transport, agent, waybill, dates, staff, location, invoice, parcels…"
                 className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
               />
-              {listSearch.trim() ? (
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setListSearch("")}
-                  className="shrink-0 rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+                  onClick={handleExportExcel}
+                  disabled={filteredByAdminControls.length === 0}
+                  className="inline-flex items-center justify-center rounded-lg bg-[#245236] px-3 py-2 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-50"
                 >
-                  Clear
+                  Export Excel
                 </button>
-              ) : null}
+                {listSearch.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => setListSearch("")}
+                    className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
             </div>
           </label>
+          {canManage ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
+                Payment status
+                <select
+                  value={adminPaymentStatusFilter}
+                  onChange={(e) => setAdminPaymentStatusFilter(e.target.value)}
+                  className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                >
+                  <option value="">All</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="PARTIAL">PARTIAL</option>
+                  <option value="DONE">DONE</option>
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
+                Debit note
+                <select
+                  value={adminDebitNoteFilter}
+                  onChange={(e) =>
+                    setAdminDebitNoteFilter(e.target.value as "all" | "present" | "missing")
+                  }
+                  className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                >
+                  <option value="all">All</option>
+                  <option value="present">Present</option>
+                  <option value="missing">Missing</option>
+                </select>
+              </label>
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -441,7 +556,7 @@ export function InventoryManager({
           <p className="p-8 text-center text-sm text-zinc-500">
             No inventory rows yet.
           </p>
-        ) : filteredInventories.length === 0 ? (
+        ) : filteredByAdminControls.length === 0 ? (
           <p className="p-8 text-center text-sm text-zinc-500">
             No rows match <span className="font-medium text-[#245236]">&quot;{listSearch.trim()}&quot;</span>.
             Try a shorter or different term, or clear the search.
@@ -449,7 +564,7 @@ export function InventoryManager({
         ) : (
           <>
             <div className="divide-y divide-[#245236]/15 md:hidden">
-              {filteredInventories.map((row) => (
+              {filteredByAdminControls.map((row) => (
                 <article key={row.id} className="space-y-3 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -478,8 +593,10 @@ export function InventoryManager({
                       <p className="text-[#245236]/85">{row.invoice_number ?? "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-[#245236]/70">Item</p>
-                      <p className="text-[#245236]/85">{itemLabel(row.item_name)}</p>
+                      <p className="text-xs text-[#245236]/70">Parcels</p>
+                      <p className="text-[#245236]/85">
+                        {row.number_of_parcels ?? "—"}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs text-[#245236]/70">Entry date</p>
@@ -503,29 +620,18 @@ export function InventoryManager({
 
                   <div className="flex justify-end gap-2 pt-1">
                     {canManage || allowRestrictedEdit ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormError(null);
-                            closeCreateModal();
-                            setRowError(null);
-                            setEditingId(row.id);
-                          }}
-                          className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
-                        >
-                          Edit
-                        </button>
-                        {canManage ? (
-                          <button
-                            type="button"
-                            onClick={() => runDelete(row.id)}
-                            className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                      </>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormError(null);
+                          closeCreateModal();
+                          setRowError(null);
+                          setEditingId(row.id);
+                        }}
+                        className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                      >
+                        Edit
+                      </button>
                     ) : (
                       <span className="text-xs text-[#245236]/70">View only</span>
                     )}
@@ -549,21 +655,20 @@ export function InventoryManager({
                   <th className="px-4 py-3">Staff</th>
                   <th className="px-4 py-3">Location</th>
                   <th className="px-4 py-3">Invoice #</th>
-                  <th className="px-4 py-3">Item</th>
+                  <th className="px-4 py-3">Parcels</th>
                   <th className="px-4 py-3">Billed qty</th>
                   <th className="px-4 py-3">Received qty</th>
                   <th className="px-4 py-3">Tallying</th>
                   <th className="px-4 py-3">Pricing</th>
                   <th className="px-4 py-3">Stickering</th>
                   <th className="px-4 py-3">Supply</th>
-                  <th className="px-4 py-3">Stock note</th>
                   <th className="px-4 py-3">Inv. amount</th>
                   <th className="px-4 py-3">Inv. date</th>
                   <th className="px-4 py-3">Inv. image</th>
                   <th className="px-4 py-3">Inv. PDF</th>
-                  <th className="px-4 py-3">Pay details</th>
-                  <th className="px-4 py-3">Pay mode</th>
-                  <th className="px-4 py-3">Pay status</th>
+                  {canManage ? <th className="px-4 py-3">Pay details</th> : null}
+                  {canManage ? <th className="px-4 py-3">Pay mode</th> : null}
+                  {canManage ? <th className="px-4 py-3">Pay status</th> : null}
                   <th className="px-4 py-3">Debit note</th>
                   <th className="px-4 py-3">Comments</th>
                   <th className="px-4 py-3">Created</th>
@@ -572,7 +677,7 @@ export function InventoryManager({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#245236]/15">
-                {filteredInventories.map((row) => (
+                {filteredByAdminControls.map((row) => (
                   <tr
                     key={row.id}
                     className="hover:bg-[#FEED01]/20"
@@ -611,7 +716,7 @@ export function InventoryManager({
                           {row.invoice_number ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {itemLabel(row.item_name)}
+                          {row.number_of_parcels ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
                           {row.billed_quantity ?? "—"}
@@ -631,9 +736,6 @@ export function InventoryManager({
                         <td className="px-4 py-3 text-[#245236]/80">
                           {row.supply ?? "—"}
                         </td>
-                        <td className="max-w-[160px] truncate px-4 py-3 text-[#245236]/80">
-                          {previewText(row.stock_note)}
-                        </td>
                         <td className="px-4 py-3 text-[#245236]/80">
                           {formatMaybeNumber(row.invoice_amount)}
                         </td>
@@ -646,15 +748,21 @@ export function InventoryManager({
                         <td className="max-w-[120px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.invoice_pdf_url)}
                         </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
-                          {previewText(row.payment_details)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.payment_mode ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.payment_status ?? "—"}
-                        </td>
+                        {canManage ? (
+                          <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
+                            {previewText(row.payment_details)}
+                          </td>
+                        ) : null}
+                        {canManage ? (
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            {row.payment_mode ?? "—"}
+                          </td>
+                        ) : null}
+                        {canManage ? (
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            {row.payment_status ?? "—"}
+                          </td>
+                        ) : null}
                         <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.debit_note)}
                         </td>
@@ -669,29 +777,18 @@ export function InventoryManager({
                         </td>
                         <td className="px-4 py-3 text-right">
                           {canManage || allowRestrictedEdit ? (
-                            <div className="flex justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setFormError(null);
-                                  closeCreateModal();
-                                  setRowError(null);
-                                  setEditingId(row.id);
-                                }}
-                                className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
-                              >
-                                Edit
-                              </button>
-                              {canManage ? (
-                                <button
-                                  type="button"
-                                  onClick={() => runDelete(row.id)}
-                                  className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
-                                >
-                                  Delete
-                                </button>
-                              ) : null}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormError(null);
+                                closeCreateModal();
+                                setRowError(null);
+                                setEditingId(row.id);
+                              }}
+                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                            >
+                              Edit
+                            </button>
                           ) : (
                             <span className="text-xs text-[#245236]/70">
                               View only
@@ -754,7 +851,7 @@ function InventoryFormFields({
   agents,
   transports,
   users,
-  items,
+  canManage,
   restrictEditToEmptyFields = false,
 }: {
   mode: "create" | "edit";
@@ -762,7 +859,7 @@ function InventoryFormFields({
   agents: AgentLookupRow[];
   transports: TransportLookupRow[];
   users: UserLookupRow[];
-  items: ProductLookupRow[];
+  canManage: boolean;
   restrictEditToEmptyFields?: boolean;
 }) {
   const v = values;
@@ -783,6 +880,7 @@ function InventoryFormFields({
           type="text"
           autoComplete="off"
           defaultValue={v?.inventory_number ?? ""}
+          required
           readOnly={ro && invHasStr(v?.inventory_number)}
           className={ro && invHasStr(v?.inventory_number) ? fieldReadOnlyClass : fieldInputClass}
           placeholder="ITRY-001"
@@ -878,6 +976,7 @@ function InventoryFormFields({
         defaultId={v?.staff_name ?? ""}
         getLabel={(u) => u.name}
         label="Staff"
+        required
         readOnly={ro && invHasStr(v?.staff_name)}
       />
 
@@ -917,14 +1016,24 @@ function InventoryFormFields({
         />
       </label>
 
-      <ForeignKeySelect
-        name="item_name"
-        options={items}
-        defaultId={v?.item_name ?? ""}
-        getLabel={(it) => it.product_name}
-        label="Item"
-        readOnly={ro && invHasStr(v?.item_name)}
-      />
+      <label className={fieldLabelClass}>
+        Number of parcels
+        <select
+          name="number_of_parcels"
+          defaultValue={v?.number_of_parcels != null ? String(v.number_of_parcels) : ""}
+          disabled={ro && invHasQty(v?.number_of_parcels)}
+          className={
+            ro && invHasQty(v?.number_of_parcels) ? fieldReadOnlyClass : fieldInputClass
+          }
+        >
+          <option value="">—</option>
+          {Array.from({ length: 30 }).map((_, i) => (
+            <option key={i + 1} value={i + 1}>
+              {i + 1}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <label className={fieldLabelClass}>
         Billed quantity
@@ -1043,17 +1152,6 @@ function InventoryFormFields({
       </label>
 
       <label className={fieldLabelClass}>
-        Stock note
-        <textarea
-          name="stock_note"
-          defaultValue={v?.stock_note ?? ""}
-          readOnly={ro && invHasStr(v?.stock_note)}
-          className={`min-h-[86px] resize-y ${ro && invHasStr(v?.stock_note) ? fieldReadOnlyClass : fieldInputClass}`}
-          placeholder="Additional details..."
-        />
-      </label>
-
-      <label className={fieldLabelClass}>
         Invoice amount
         <input
           name="invoice_amount"
@@ -1157,62 +1255,66 @@ function InventoryFormFields({
         ) : null}
       </label>
 
-      <label className={fieldLabelClass}>
-        Payment details
-        <textarea
-          name="payment_details"
-          defaultValue={v?.payment_details ?? ""}
-          readOnly={ro && invHasStr(v?.payment_details)}
-          className={`min-h-[72px] resize-y ${ro && invHasStr(v?.payment_details) ? fieldReadOnlyClass : fieldInputClass}`}
-        />
-      </label>
+      {canManage ? (
+        <>
+          <label className={fieldLabelClass}>
+            Payment details
+            <textarea
+              name="payment_details"
+              defaultValue={v?.payment_details ?? ""}
+              readOnly={ro && invHasStr(v?.payment_details)}
+              className={`min-h-[72px] resize-y ${ro && invHasStr(v?.payment_details) ? fieldReadOnlyClass : fieldInputClass}`}
+            />
+          </label>
 
-      <label className={fieldLabelClass}>
-        Payment mode
-        {ro && invHasStr(v?.payment_mode) ? (
-          <LockedSelectValue
-            name="payment_mode"
-            value={v?.payment_mode ?? ""}
-            label={v?.payment_mode ?? "—"}
-          />
-        ) : (
-          <select
-            name="payment_mode"
-            defaultValue={v?.payment_mode ?? ""}
-            className={fieldInputClass}
-          >
-            <option value="">—</option>
-            <option value="CASH">CASH</option>
-            <option value="CARD">CARD</option>
-            <option value="SBI">SBI</option>
-            <option value="AXIS">AXIS</option>
-            <option value="IOB">IOB</option>
-            <option value="MIXED">MIXED</option>
-          </select>
-        )}
-      </label>
+          <label className={fieldLabelClass}>
+            Payment mode
+            {ro && invHasStr(v?.payment_mode) ? (
+              <LockedSelectValue
+                name="payment_mode"
+                value={v?.payment_mode ?? ""}
+                label={v?.payment_mode ?? "—"}
+              />
+            ) : (
+              <select
+                name="payment_mode"
+                defaultValue={v?.payment_mode ?? ""}
+                className={fieldInputClass}
+              >
+                <option value="">—</option>
+                <option value="CASH">CASH</option>
+                <option value="CARD">CARD</option>
+                <option value="SBI">SBI</option>
+                <option value="AXIS">AXIS</option>
+                <option value="IOB">IOB</option>
+                <option value="MIXED">MIXED</option>
+              </select>
+            )}
+          </label>
 
-      <label className={fieldLabelClass}>
-        Payment status
-        {ro && invHasStr(v?.payment_status) ? (
-          <LockedSelectValue
-            name="payment_status"
-            value={v?.payment_status ?? ""}
-            label={v?.payment_status ?? "—"}
-          />
-        ) : (
-          <select
-            name="payment_status"
-            defaultValue={v?.payment_status ?? ""}
-            className={fieldInputClass}
-          >
-            <option value="">—</option>
-            <option value="PENDING">PENDING</option>
-            <option value="PARTIAL">PARTIAL</option>
-            <option value="DONE">DONE</option>
-          </select>
-        )}
-      </label>
+          <label className={fieldLabelClass}>
+            Payment status
+            {ro && invHasStr(v?.payment_status) ? (
+              <LockedSelectValue
+                name="payment_status"
+                value={v?.payment_status ?? ""}
+                label={v?.payment_status ?? "—"}
+              />
+            ) : (
+              <select
+                name="payment_status"
+                defaultValue={v?.payment_status ?? ""}
+                className={fieldInputClass}
+              >
+                <option value="">—</option>
+                <option value="PENDING">PENDING</option>
+                <option value="PARTIAL">PARTIAL</option>
+                <option value="DONE">DONE</option>
+              </select>
+            )}
+          </label>
+        </>
+      ) : null}
 
       <label className={fieldLabelClass}>
         Debit note
@@ -1249,6 +1351,7 @@ function ForeignKeySelect<T extends { id: string }>({
   defaultId,
   getLabel,
   label,
+  required = false,
   readOnly = false,
 }: {
   name: string;
@@ -1256,6 +1359,7 @@ function ForeignKeySelect<T extends { id: string }>({
   defaultId: string;
   getLabel: (row: T) => string | null | undefined;
   label: string;
+  required?: boolean;
   readOnly?: boolean;
 }) {
   const selected = defaultId ? options.find((o) => o.id === defaultId) : null;
@@ -1281,6 +1385,7 @@ function ForeignKeySelect<T extends { id: string }>({
       <select
         name={name}
         defaultValue={defaultId}
+        required={required}
         className={fieldInputClass}
       >
         <option value="">—</option>
@@ -1336,7 +1441,7 @@ function inventoryRowMatchesLikeSearch(
     agentLabel: (id: string | null) => string;
     transportLabel: (id: string | null) => string;
     userLabel: (id: string | null) => string;
-    itemLabel: (id: string | null) => string;
+    includePaymentFields: boolean;
   },
 ): boolean {
   if (!needleLower) return true;
@@ -1350,13 +1455,14 @@ function inventoryRowMatchesLikeSearch(
     helpers.userLabel(row.staff_name),
     row.location,
     row.invoice_number,
-    helpers.itemLabel(row.item_name),
+    row.number_of_parcels,
     row.invoice_date,
-    row.payment_mode,
-    row.payment_status,
     row.created_at,
     formatDate(row.created_at),
   ];
+  if (helpers.includePaymentFields) {
+    haystacks.push(row.payment_mode, row.payment_status, row.payment_details);
+  }
   return haystacks.some((h) =>
     String(h ?? "")
       .toLowerCase()
@@ -1374,5 +1480,10 @@ function previewText(s: string | null | undefined, max = 48) {
   if (!s?.trim()) return "—";
   const t = s.trim();
   return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
+
+function toCsvCell(value: string | number | null | undefined) {
+  const text = value == null ? "" : String(value);
+  return `"${text.replaceAll('"', '""')}"`;
 }
 

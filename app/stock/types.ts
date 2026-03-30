@@ -4,6 +4,10 @@ export type StockRow = {
   inventory_number: string | null;
   brand_name: string | null;
   product: string | null;
+  /** FK to Style.id */
+  style: string | null;
+  /** FK to Fabric.id (quoted column `"Fabric"` in Postgres) */
+  Fabric: string | null;
   HSN_code: string | null;
   GST_group: string | null;
   cost_price: number | null;
@@ -18,16 +22,21 @@ export type StockRow = {
 export type ProductOption = {
   id: string;
   product_name: string | null;
-  product_description: string | null;
-  style: string | null;
-  fabric: string | null;
-  brand_id: string | null;
-  brand_label: string | null;
 };
 
 export type BrandOption = {
   id: string;
   brand_name: string | null;
+};
+
+export type StyleOption = {
+  id: string;
+  style_name: string | null;
+};
+
+export type FabricOption = {
+  id: string;
+  fabric_name: string | null;
 };
 
 /** Inventory row fields shown read-only when adding stock after picking an inventory number. */

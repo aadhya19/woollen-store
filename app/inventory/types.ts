@@ -11,14 +11,13 @@ export type InventoryRow = {
   staff_name: string | null;
   location: string | null;
   invoice_number: string | null;
-  item_name: string | null;
+  number_of_parcels: number | string | null;
   billed_quantity: number | string | null;
   received_quantity: number | string | null;
   tallying: string | null;
   pricing: string | null;
   stickering: string | null;
   supply: string | null;
-  stock_note: string | null;
   created_at: string;
   updated_at: string | null;
   invoice_amount: number | null;
@@ -30,11 +29,6 @@ export type InventoryRow = {
   payment_status: string | null;
   debit_note: string | null;
   comments: string | null;
-};
-
-export type ProductLookupRow = {
-  id: string;
-  product_name: string | null;
 };
 
 export type AgentLookupRow = {

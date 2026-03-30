@@ -13,44 +13,44 @@ function emptyToNull(value: FormDataEntryValue | null): string | null {
 
 function mapSupabaseError(message: string) {
   if (message.includes("row-level security")) {
-    return `${message} Enable INSERT/UPDATE/DELETE policies for the anon (or authenticated) role on Brand.`;
+    return `${message} Enable INSERT/UPDATE/DELETE policies for the anon (or authenticated) role on Style.`;
   }
   return message;
 }
 
-export async function createBrand(formData: FormData): Promise<ActionResult> {
+export async function createStyle(formData: FormData): Promise<ActionResult> {
   const authError = await requireActionRole(["admin"]);
   if (authError) return { error: authError };
 
-  const brand_name = emptyToNull(formData.get("brand_name"));
+  const style_name = emptyToNull(formData.get("style_name"));
   const supabase = createSupabase();
-  const { error } = await supabase.from("Brand").insert({ brand_name });
+  const { error } = await supabase.from("Style").insert({ style_name });
 
   if (error) return { error: mapSupabaseError(error.message) };
-  revalidatePath("/brands");
-  revalidatePath("/products");
+  revalidatePath("/style");
+  revalidatePath("/stock");
   return { error: null };
 }
 
-export async function updateBrand(formData: FormData): Promise<ActionResult> {
+export async function updateStyle(formData: FormData): Promise<ActionResult> {
   const authError = await requireActionRole(["admin"]);
   if (authError) return { error: authError };
 
   const id = formData.get("id")?.toString() ?? "";
-  if (!id) return { error: "Missing brand id" };
+  if (!id) return { error: "Missing style id" };
 
-  const brand_name = emptyToNull(formData.get("brand_name"));
+  const style_name = emptyToNull(formData.get("style_name"));
   const supabase = createSupabase();
   const { error } = await supabase
-    .from("Brand")
+    .from("Style")
     .update({
-      brand_name,
+      style_name,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
 
   if (error) return { error: mapSupabaseError(error.message) };
-  revalidatePath("/brands");
-  revalidatePath("/products");
+  revalidatePath("/style");
+  revalidatePath("/stock");
   return { error: null };
 }

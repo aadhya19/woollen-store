@@ -207,14 +207,13 @@ type ParsedInventoryUpdate = {
   staff_name: string | null;
   location: string | null;
   invoice_number: string | null;
-  item_name: string | null;
+  number_of_parcels: string | null;
   billed_quantity: string | null;
   received_quantity: string | null;
   tallying: string | null;
   pricing: string | null;
   stickering: string | null;
   supply: string | null;
-  stock_note: string | null;
   invoice_amount: number | null;
   invoice_date: string | null;
   invoice_image_url: string | null;
@@ -264,9 +263,11 @@ function mergeInventoryForRestrictedUser(
     invoice_number: invStrEmpty(existing.invoice_number)
       ? incoming.invoice_number
       : (existing.invoice_number as string | null),
-    item_name: invStrEmpty(existing.item_name)
-      ? incoming.item_name
-      : (existing.item_name as string | null),
+    number_of_parcels: invQtyEmpty(existing.number_of_parcels)
+      ? incoming.number_of_parcels
+      : existing.number_of_parcels != null
+        ? String(existing.number_of_parcels)
+        : null,
     billed_quantity: invQtyEmpty(existing.billed_quantity)
       ? incoming.billed_quantity
       : existing.billed_quantity != null
@@ -289,9 +290,6 @@ function mergeInventoryForRestrictedUser(
     supply: invStrEmpty(existing.supply)
       ? incoming.supply
       : (existing.supply as string | null),
-    stock_note: invStrEmpty(existing.stock_note)
-      ? incoming.stock_note
-      : (existing.stock_note as string | null),
     invoice_amount: invNumEmpty(existing.invoice_amount)
       ? incoming.invoice_amount
       : (existing.invoice_amount as number | null),
@@ -346,6 +344,9 @@ export async function createInventory(
 ): Promise<ActionResult> {
   const authError = await requireActionRole(["admin", "user"]);
   if (authError) return { error: authError };
+  const session = await getAuthSession();
+  if (!session) return { error: "Not authenticated. Please log in." };
+  const isAdmin = session.role === "admin";
 
   const inventory_number = emptyToNull(formData.get("inventory_number"));
   const company_name = emptyToNull(formData.get("company_name"));
@@ -365,9 +366,15 @@ export async function createInventory(
   if (loadingChargesErr) return { error: loadingChargesErr };
 
   const staff_name = emptyToNull(formData.get("staff_name"));
+  if (!inventory_number) return { error: "Inventory number is required." };
+  if (!staff_name) return { error: "Staff is required." };
   const location = emptyToNull(formData.get("location"));
   const invoice_number = emptyToNull(formData.get("invoice_number"));
-  const item_name = emptyToNull(formData.get("item_name"));
+
+  const { n: number_of_parcels, error: parcelsErr } = parseOptionalBigInt(
+    formData.get("number_of_parcels"),
+  );
+  if (parcelsErr) return { error: parcelsErr };
 
   const { n: billed_quantity, error: billedQtyErr } = parseOptionalBigInt(
     formData.get("billed_quantity"),
@@ -382,7 +389,6 @@ export async function createInventory(
   const pricing = emptyToNull(formData.get("pricing"));
   const stickering = emptyToNull(formData.get("stickering"));
   const supply = emptyToNull(formData.get("supply"));
-  const stock_note = emptyToNull(formData.get("stock_note"));
 
   const { n: invoice_amount, error: invoiceAmountErr } = parseOptionalFloat(
     formData.get("invoice_amount"),
@@ -394,10 +400,10 @@ export async function createInventory(
   if (invoiceUrlsCreate.error) return { error: invoiceUrlsCreate.error };
   const invoice_image_url = invoiceUrlsCreate.invoice_image_url;
   const invoice_pdf_url = invoiceUrlsCreate.invoice_pdf_url;
-  const payment_details = emptyToNull(formData.get("payment_details"));
-  const payment_mode = emptyToNull(formData.get("payment_mode"));
-  const payment_status = emptyToNull(formData.get("payment_status"));
-  const debit_note = emptyToNull(formData.get("debit_note"));
+  const payment_details = isAdmin ? emptyToNull(formData.get("payment_details")) : null;
+  const payment_mode = isAdmin ? emptyToNull(formData.get("payment_mode")) : null;
+  const payment_status = isAdmin ? emptyToNull(formData.get("payment_status")) : null;
+  const debit_note = isAdmin ? emptyToNull(formData.get("debit_note")) : null;
   const comments = emptyToNull(formData.get("comments"));
 
   const uniqErr = await assertInventoryNumberUnique(inventory_number, null);
@@ -416,14 +422,13 @@ export async function createInventory(
     staff_name,
     location,
     invoice_number,
-    item_name,
+    number_of_parcels,
     billed_quantity,
     received_quantity,
     tallying,
     pricing,
     stickering,
     supply,
-    stock_note,
     invoice_amount,
     invoice_date,
     invoice_image_url,
@@ -449,14 +454,12 @@ export async function updateInventory(
     return { error: "You do not have permission to perform this action." };
   }
   const isAdmin = session.role === "admin";
-  if (!isAdmin && !session.userId) {
-    return { error: "User identity missing. Please log in again." };
-  }
 
   const id = formData.get("id")?.toString() ?? "";
   if (!id) return { error: "Missing inventory id" };
 
   const inventory_number = emptyToNull(formData.get("inventory_number"));
+  if (!inventory_number) return { error: "Inventory number is required." };
   const company_name = emptyToNull(formData.get("company_name"));
   const agent_name = emptyToNull(formData.get("agent_name"));
   const transport_name = emptyToNull(formData.get("transport_name"));
@@ -474,9 +477,14 @@ export async function updateInventory(
   if (loadingChargesErr) return { error: loadingChargesErr };
 
   const staff_name = emptyToNull(formData.get("staff_name"));
+  if (!staff_name) return { error: "Staff is required." };
   const location = emptyToNull(formData.get("location"));
   const invoice_number = emptyToNull(formData.get("invoice_number"));
-  const item_name = emptyToNull(formData.get("item_name"));
+
+  const { n: number_of_parcels, error: parcelsErr } = parseOptionalBigInt(
+    formData.get("number_of_parcels"),
+  );
+  if (parcelsErr) return { error: parcelsErr };
 
   const { n: billed_quantity, error: billedQtyErr } = parseOptionalBigInt(
     formData.get("billed_quantity"),
@@ -491,7 +499,6 @@ export async function updateInventory(
   const pricing = emptyToNull(formData.get("pricing"));
   const stickering = emptyToNull(formData.get("stickering"));
   const supply = emptyToNull(formData.get("supply"));
-  const stock_note = emptyToNull(formData.get("stock_note"));
 
   const { n: invoice_amount, error: invoiceAmountErr } = parseOptionalFloat(
     formData.get("invoice_amount"),
@@ -502,10 +509,10 @@ export async function updateInventory(
   const invoiceUrls = await resolveInvoiceUrlsFromForm(formData);
   if (invoiceUrls.error) return { error: invoiceUrls.error };
   const { invoice_image_url, invoice_pdf_url } = invoiceUrls;
-  const payment_details = emptyToNull(formData.get("payment_details"));
-  const payment_mode = emptyToNull(formData.get("payment_mode"));
-  const payment_status = emptyToNull(formData.get("payment_status"));
-  const debit_note = emptyToNull(formData.get("debit_note"));
+  const payment_details = isAdmin ? emptyToNull(formData.get("payment_details")) : null;
+  const payment_mode = isAdmin ? emptyToNull(formData.get("payment_mode")) : null;
+  const payment_status = isAdmin ? emptyToNull(formData.get("payment_status")) : null;
+  const debit_note = isAdmin ? emptyToNull(formData.get("debit_note")) : null;
   const comments = emptyToNull(formData.get("comments"));
 
   const parsed: ParsedInventoryUpdate = {
@@ -520,14 +527,13 @@ export async function updateInventory(
     staff_name,
     location,
     invoice_number,
-    item_name,
+    number_of_parcels,
     billed_quantity,
     received_quantity,
     tallying,
     pricing,
     stickering,
     supply,
-    stock_note,
     invoice_amount,
     invoice_date,
     invoice_image_url,
@@ -562,7 +568,6 @@ export async function updateInventory(
     .from("Inventory")
     .select("*")
     .eq("id", id)
-    .eq("staff_name", session.userId)
     .maybeSingle();
 
   if (fetchErr) return { error: mapSupabaseError(fetchErr.message) };
@@ -579,22 +584,7 @@ export async function updateInventory(
       ...merged,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id)
-    .eq("staff_name", session.userId);
-
-  if (error) return { error: mapSupabaseError(error.message) };
-  revalidatePath("/inventory");
-  return { error: null };
-}
-
-export async function deleteInventory(id: string): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
-  if (authError) return { error: authError };
-
-  if (!id) return { error: "Missing inventory id" };
-
-  const supabase = createSupabase();
-  const { error } = await supabase.from("Inventory").delete().eq("id", id);
+    .eq("id", id);
 
   if (error) return { error: mapSupabaseError(error.message) };
   revalidatePath("/inventory");

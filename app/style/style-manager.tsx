@@ -3,15 +3,15 @@
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { createBrand, updateBrand } from "./actions";
+import { createStyle, updateStyle } from "./actions";
 import Modal from "@/app/components/Modal";
-import type { BrandRow } from "./types";
+import type { StyleRow } from "./types";
 
 type Props = {
-  brands: BrandRow[];
+  styles: StyleRow[];
 };
 
-export function BrandsManager({ brands }: Props) {
+export function StyleManager({ styles }: Props) {
   const router = useRouter();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -20,19 +20,19 @@ export function BrandsManager({ brands }: Props) {
 
   async function runCreate(formData: FormData) {
     setFormError(null);
-    const r = await createBrand(formData);
+    const r = await createStyle(formData);
     if (r.error) {
       setFormError(r.error);
       return;
     }
     router.refresh();
     setIsCreateOpen(false);
-    (document.getElementById("create-brand-form") as HTMLFormElement)?.reset();
+    (document.getElementById("create-style-form") as HTMLFormElement)?.reset();
   }
 
   async function runUpdate(formData: FormData) {
     setRowError(null);
-    const r = await updateBrand(formData);
+    const r = await updateStyle(formData);
     if (r.error) {
       setRowError(r.error);
       return;
@@ -45,9 +45,9 @@ export function BrandsManager({ brands }: Props) {
     <div className="space-y-4">
       <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-[#245236]/75">
-          {brands.length === 0
-            ? "No brands yet."
-            : `${brands.length} brand${brands.length === 1 ? "" : "s"}.`}
+          {styles.length === 0
+            ? "No styles yet."
+            : `${styles.length} style${styles.length === 1 ? "" : "s"}.`}
         </p>
         <button
           type="button"
@@ -64,8 +64,8 @@ export function BrandsManager({ brands }: Props) {
       <Modal
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Add brand"
-        description="Create a new brand."
+        title="Add style"
+        description="Create a new style."
         panelClassName="max-w-lg"
       >
         {formError ? (
@@ -76,11 +76,11 @@ export function BrandsManager({ brands }: Props) {
             {formError}
           </p>
         ) : null}
-        <form id="create-brand-form" action={runCreate} className="mt-4 space-y-4">
+        <form id="create-style-form" action={runCreate} className="mt-4 space-y-4">
           <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
-            Brand name
+            Style name
             <input
-              name="brand_name"
+              name="style_name"
               type="text"
               autoComplete="off"
               className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
@@ -103,8 +103,8 @@ export function BrandsManager({ brands }: Props) {
       ) : null}
 
       <div className="overflow-hidden rounded-xl border border-[#245236]/20 bg-white shadow-sm">
-        {brands.length === 0 ? (
-          <p className="p-8 text-center text-sm text-zinc-500">No brands yet.</p>
+        {styles.length === 0 ? (
+          <p className="p-8 text-center text-sm text-zinc-500">No styles yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[480px] text-left text-sm">
@@ -117,22 +117,19 @@ export function BrandsManager({ brands }: Props) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#245236]/15">
-                {brands.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-[#FEED01]/20"
-                  >
+                {styles.map((row) => (
+                  <tr key={row.id} className="hover:bg-[#FEED01]/20">
                     {editingId === row.id ? (
                       <td colSpan={4} className="px-4 py-3">
                         <form action={runUpdate} className="flex flex-wrap items-end gap-3">
                           <input type="hidden" name="id" value={row.id} />
                           <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
-                            Brand name
+                            Style name
                             <input
-                              name="brand_name"
+                              name="style_name"
                               type="text"
                               autoComplete="off"
-                              defaultValue={row.brand_name ?? ""}
+                              defaultValue={row.style_name ?? ""}
                               className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
                             />
                           </label>
@@ -156,7 +153,7 @@ export function BrandsManager({ brands }: Props) {
                     ) : (
                       <>
                         <td className="px-4 py-3 font-medium text-[#245236]">
-                          {row.brand_name ?? "—"}
+                          {row.style_name ?? "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
                           {formatDate(row.created_at)}

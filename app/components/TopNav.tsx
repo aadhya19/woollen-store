@@ -43,6 +43,12 @@ export default async function TopNav() {
               <Link href="/products" className={navClass}>
                 Products
               </Link>
+              <Link href="/style" className={navClass}>
+                Style
+              </Link>
+              <Link href="/fabric" className={navClass}>
+                Fabric
+              </Link>
               <Link href="/stock" className={navClass}>
                 Stock
               </Link>

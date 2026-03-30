@@ -59,20 +59,3 @@ export async function updateTransport(
   revalidatePath("/transports");
   return { error: null };
 }
-
-export async function deleteTransport(
-  id: string,
-): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
-  if (authError) return { error: authError };
-
-  if (!id) return { error: "Missing transport id" };
-
-  const supabase = createSupabase();
-  const { error } = await supabase.from("Transport").delete().eq("id", id);
-
-  if (error) return { error: mapSupabaseError(error.message) };
-  revalidatePath("/transports");
-  return { error: null };
-}
-

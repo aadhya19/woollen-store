@@ -3,7 +3,14 @@ import { requireAuth } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
 import { StockManager } from "./stock-manager";
 import type { AgentLookupRow } from "../inventory/types";
-import type { BrandOption, InventoryStockContext, ProductOption, StockRow } from "./types";
+import type {
+  BrandOption,
+  FabricOption,
+  InventoryStockContext,
+  ProductOption,
+  StockRow,
+  StyleOption,
+} from "./types";
 
 function resolveAgentDisplayName(
   raw: string | null,
@@ -31,23 +38,33 @@ export default async function StockPage() {
     { data: stockData, error: stockError },
     { data: productsRaw, error: productsError },
     { data: brandsRaw, error: brandsError },
+    { data: stylesRaw, error: stylesError },
+    { data: fabricsRaw, error: fabricsError },
     { data: inventoryLookupData, error: inventoryLookupError },
     { data: agentsData, error: agentsError },
   ] = await Promise.all([
     supabase
       .from("Stock")
       .select(
-        "id, stock_number, inventory_number, brand_name, product, HSN_code, GST_group, cost_price, selling_price, mrp, pieces, size, created_at, updated_at",
+        'id, stock_number, inventory_number, brand_name, product, style, "Fabric", "HSN_code", "GST_group", cost_price, selling_price, mrp, pieces, size, created_at, updated_at',
       )
       .order("created_at", { ascending: false }),
     supabase
       .from("Products")
-      .select("id, product_name, product_description, style, fabric, brand_name")
+      .select("id, product_name")
       .order("product_name", { ascending: true, nullsFirst: false }),
     supabase
       .from("Brand")
       .select("id, brand_name")
       .order("brand_name", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("Style")
+      .select("id, style_name")
+      .order("style_name", { ascending: true, nullsFirst: false }),
+    supabase
+      .from("Fabric")
+      .select("id, fabric_name")
+      .order("fabric_name", { ascending: true, nullsFirst: false }),
     supabase
       .from("Inventory")
       .select(
@@ -63,15 +80,11 @@ export default async function StockPage() {
     stockError?.message ??
     productsError?.message ??
     brandsError?.message ??
+    stylesError?.message ??
+    fabricsError?.message ??
     inventoryLookupError?.message ??
     agentsError?.message ??
     null;
-
-  const brandById = new Map<string, string | null>();
-  for (const b of brandsRaw ?? []) {
-    const row = b as { id: string; brand_name: string | null };
-    brandById.set(row.id, row.brand_name);
-  }
 
   const brandOptions: BrandOption[] = (brandsRaw ?? []).map((b) => {
     const row = b as { id: string; brand_name: string | null };
@@ -79,24 +92,18 @@ export default async function StockPage() {
   });
 
   const productOptions: ProductOption[] = (productsRaw ?? []).map((p) => {
-    const row = p as {
-      id: string;
-      product_name: string | null;
-      product_description: string | null;
-      style: string | null;
-      fabric: string | null;
-      brand_name: string | null;
-    };
-    const bid = row.brand_name;
-    return {
-      id: row.id,
-      product_name: row.product_name,
-      product_description: row.product_description,
-      style: row.style,
-      fabric: row.fabric,
-      brand_id: bid,
-      brand_label: bid ? brandById.get(bid) ?? null : null,
-    };
+    const row = p as { id: string; product_name: string | null };
+    return { id: row.id, product_name: row.product_name };
+  });
+
+  const styleOptions: StyleOption[] = (stylesRaw ?? []).map((s) => {
+    const row = s as { id: string; style_name: string | null };
+    return { id: row.id, style_name: row.style_name };
+  });
+
+  const fabricOptions: FabricOption[] = (fabricsRaw ?? []).map((f) => {
+    const row = f as { id: string; fabric_name: string | null };
+    return { id: row.id, fabric_name: row.fabric_name };
   });
 
   const byInventoryNumber = new Map<string, InventoryStockContext>();
@@ -118,10 +125,7 @@ export default async function StockPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader
-        title="Stock"
-        description=""
-      />
+      <PageHeader title="Stock" description="" />
 
       {errorMessage ? (
         <div
@@ -136,6 +140,8 @@ export default async function StockPage() {
           stock={(stockData ?? []) as StockRow[]}
           products={productOptions}
           brands={brandOptions}
+          styles={styleOptions}
+          fabrics={fabricOptions}
           inventoryForStock={inventoryForStock}
           canManage={session.role === "admin"}
           allowRestrictedEdit={session.role === "user"}
