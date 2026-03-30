@@ -18,17 +18,13 @@ export default async function BrandsPage() {
     <div className="mx-auto max-w-4xl">
       <PageHeader
         title="Brands"
-        description={
-          <>
-            Admin CRUD for <code className="text-xs">public.Brand</code>.
-          </>
-        }
+        description=""
       />
 
       {error ? (
         <div
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
         >
           <p className="font-medium">Could not load brands</p>
           <p className="mt-1 opacity-90">{error.message}</p>

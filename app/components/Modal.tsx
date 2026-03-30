@@ -43,27 +43,27 @@ export default function Modal({
 
   return (
     <div
-      className={`fixed inset-0 flex items-center justify-center bg-zinc-950/50 p-4 backdrop-blur-sm ${backdropClassName ?? "z-50"}`}
+      className={`fixed inset-0 flex items-center justify-center bg-[#245236]/35 p-4 backdrop-blur-sm ${backdropClassName ?? "z-50"}`}
       role="dialog"
       aria-modal="true"
       aria-label={title}
       onClick={onClose}
     >
       <div
-        className={`w-full max-w-3xl rounded-2xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-800 dark:bg-zinc-900 ${panelClassName ?? ""}`}
+        className={`w-full max-w-3xl rounded-2xl border border-[#245236]/20 bg-white shadow-2xl ${panelClassName ?? ""}`}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+        <div className="flex items-start justify-between gap-4 border-b border-[#245236]/20 px-5 py-4">
           <div>
-            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{title}</h2>
+            <h2 className="text-base font-semibold text-[#245236]">{title}</h2>
             {description ? (
-              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{description}</p>
+              <p className="mt-1 text-sm text-[#245236]/75">{description}</p>
             ) : null}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-1.5 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
           >
             Close
           </button>

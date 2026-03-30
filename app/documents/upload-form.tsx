@@ -22,14 +22,14 @@ export function UploadForm() {
       {state.error ? (
         <p
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
         >
           {state.error}
         </p>
       ) : null}
 
       {state.success ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/50 dark:bg-emerald-950/50 dark:text-emerald-200">
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
           {state.success}{" "}
           {state.fileUrl ? (
             <a
@@ -44,26 +44,26 @@ export function UploadForm() {
         </p>
       ) : null}
 
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="text-xs text-[#245236]/70">
         Files are saved in your own OneDrive under the folder from{" "}
         <code className="text-[11px]">ONEDRIVE_UPLOAD_FOLDER</code> (default:{" "}
         <code className="text-[11px]">My App Uploads</code>).{" "}
         <a
           href="/api/auth/microsoft"
-          className="font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+          className="font-medium text-[#245236] underline-offset-2 hover:underline"
         >
           Connect Microsoft
         </a>{" "}
         if uploads fail with a sign-in message.
       </p>
 
-      <label className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+      <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
         PDF or image
         <input
           name="document"
           type="file"
           accept="application/pdf,image/*"
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-zinc-800 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:file:bg-zinc-100 dark:file:text-zinc-900 dark:hover:file:bg-zinc-200"
+          className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] file:mr-3 file:rounded-md file:border-0 file:bg-[#245236] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[#FEED01] hover:file:bg-[#1c3f2a]"
         />
       </label>
 
@@ -78,7 +78,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="h-[38px] rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+      className="h-[38px] rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:cursor-not-allowed disabled:opacity-60"
     >
       {pending ? "Uploading..." : "Upload to OneDrive"}
     </button>

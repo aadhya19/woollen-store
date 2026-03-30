@@ -25,7 +25,6 @@ const navByRole: Record<UserRole, Array<{ href: string; label: string }>> = {
     { href: "/", label: "Dashboard" },
     { href: "/inventory", label: "Inventory" },
     { href: "/stock", label: "Stock" },
-    { href: "/documents", label: "Documents" },
   ],
 };
 
@@ -50,8 +49,8 @@ export default function SidebarNav({ role, mobile = false }: SidebarNavProps) {
             href={link.href}
             className={`rounded-xl px-3 py-2 text-sm font-medium transition ${
               active
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                ? "bg-[#245236] text-[#FEED01]"
+                : "text-[#245236] hover:bg-[#FEED01]/40"
             }`}
           >
             {link.label}

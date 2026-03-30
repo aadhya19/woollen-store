@@ -18,7 +18,6 @@ export default async function Home() {
       : [
           { href: "/inventory", label: "Inventory" },
           { href: "/stock", label: "Stock" },
-          { href: "/documents", label: "Documents" },
         ];
 
   return (
@@ -32,13 +31,13 @@ export default async function Home() {
           </>
         }
       />
-      <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-2xl border border-[#245236]/20 bg-white p-5 shadow-sm">
         <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {links.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800/60"
+              className="rounded-xl border border-[#245236]/25 bg-[#FEED01]/40 px-4 py-3 text-sm font-semibold text-[#245236] shadow-sm hover:bg-[#FEED01]/60"
             >
               Open {link.label}
             </Link>

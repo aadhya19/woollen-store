@@ -1,9 +1,11 @@
 import Link from "next/link";
+import Image from "next/image";
 import { getAuthSession } from "@/lib/auth";
 import { logout } from "@/app/login/actions";
+import PendingButton from "./PendingButton";
 
 const navClass =
-  "text-sm font-medium text-zinc-700 underline-offset-4 hover:underline dark:text-zinc-300";
+  "text-sm font-medium text-[#245236] underline-offset-4 hover:underline";
 
 export default async function TopNav() {
   const session = await getAuthSession();
@@ -11,10 +13,17 @@ export default async function TopNav() {
   const isUser = session?.role === "user";
 
   return (
-    <header className="border-b border-zinc-200 bg-white/70 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/60">
+    <header className="border-b border-[#245236]/20 bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <Link href="/" className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-          My App
+        <Link href="/" className="inline-flex items-center">
+          <Image
+            src="/WS_Logo.avif"
+            alt="WS Logo"
+            width={128}
+            height={40}
+            className="h-8 w-auto"
+            priority
+          />
         </Link>
         <nav className="flex flex-wrap gap-x-4 gap-y-2">
           {isAdmin ? (
@@ -50,20 +59,15 @@ export default async function TopNav() {
               <Link href="/stock" className={navClass}>
                 Stock
               </Link>
-              <Link href="/documents" className={navClass}>
-                Documents
-              </Link>
             </>
           ) : null}
           {session ? (
             <>
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              <span className="text-sm text-[#245236]/70">
                 {session.role}
               </span>
               <form action={logout}>
-                <button className={navClass} type="submit">
-                  Logout
-                </button>
+                <PendingButton idleLabel="Logout" pendingLabel="Logging out..." className={navClass} />
               </form>
             </>
           ) : (

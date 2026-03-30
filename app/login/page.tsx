@@ -17,17 +17,17 @@ export default async function LoginPage({ searchParams }: Props) {
   const hasRoleError = params.error === "role";
 
   return (
-    <div className="min-h-full bg-zinc-50 px-4 py-10 font-sans text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
-      <div className="mx-auto max-w-md rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="min-h-full bg-[#fffef2] px-4 py-10 font-sans text-[#245236]">
+      <div className="mx-auto max-w-md rounded-xl border border-[#245236]/20 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold tracking-tight">Login</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-[#245236]/75">
           Sign in with your username and password.
         </p>
 
         {hasError ? (
           <p
             role="alert"
-            className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+            className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
           >
             Invalid username or password.
           </p>
@@ -36,7 +36,7 @@ export default async function LoginPage({ searchParams }: Props) {
         {hasRoleError ? (
           <p
             role="alert"
-            className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+            className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
           >
             This account does not have a valid role. Use <code>admin</code>,{" "}
             <code>user</code>, or <code>employee</code> in the linked Roles
@@ -45,31 +45,31 @@ export default async function LoginPage({ searchParams }: Props) {
         ) : null}
 
         <form action={login} className="mt-4 space-y-4">
-          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
             Username
             <input
               name="username"
               type="text"
               autoComplete="username"
               defaultValue="admin"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
             />
           </label>
 
-          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+          <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
             Password
             <input
               name="password"
               type="password"
               autoComplete="current-password"
               defaultValue="test123"
-              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
             />
           </label>
 
           <button
             type="submit"
-            className="h-[42px] w-full rounded-lg bg-zinc-900 px-5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+            className="h-[42px] w-full rounded-lg bg-[#245236] px-5 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
           >
             Login
           </button>

@@ -19,6 +19,7 @@ export function ProductsManager({ products, brands }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [, startDelete] = useTransition();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function runCreate(formData: FormData) {
     setFormError(null);
@@ -45,13 +46,16 @@ export function ProductsManager({ products, brands }: Props) {
 
   function runDelete(id: string) {
     setRowError(null);
+    setDeletingId(id);
     startDelete(async () => {
       const r = await deleteProduct(id);
       if (r.error) {
         setRowError(r.error);
+        setDeletingId(null);
         return;
       }
       if (editingId === id) setEditingId(null);
+      setDeletingId(null);
       router.refresh();
     });
   }
@@ -64,8 +68,8 @@ export function ProductsManager({ products, brands }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+      <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-[#245236]/75">
           {products.length === 0
             ? "No products yet."
             : `${products.length} product${products.length === 1 ? "" : "s"}.`}
@@ -76,7 +80,7 @@ export function ProductsManager({ products, brands }: Props) {
             setFormError(null);
             setIsCreateOpen(true);
           }}
-          className="inline-flex h-[38px] items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
         >
           Add new
         </button>
@@ -86,13 +90,13 @@ export function ProductsManager({ products, brands }: Props) {
         open={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         title="Add product"
-        description="Create a row in public.Products."
+        description="Create a new product."
         panelClassName="max-w-5xl"
       >
         {formError ? (
           <p
             role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
           >
             {formError}
           </p>
@@ -105,19 +109,19 @@ export function ProductsManager({ products, brands }: Props) {
       {rowError ? (
         <p
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
         >
           {rowError}
         </p>
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="overflow-hidden rounded-xl border border-[#245236]/20 bg-white shadow-sm">
         {products.length === 0 ? (
           <p className="p-8 text-center text-sm text-zinc-500">No products yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/80 dark:text-zinc-400">
+              <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                 <tr>
                   <th className="px-4 py-3">Product</th>
                   <th className="px-4 py-3">Description</th>
@@ -129,11 +133,11 @@ export function ProductsManager({ products, brands }: Props) {
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-[#245236]/15">
                 {products.map((row) => (
                   <tr
                     key={row.id}
-                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40"
+                    className="hover:bg-[#FEED01]/20"
                   >
                     {editingId === row.id ? (
                       <td colSpan={8} className="px-4 py-3">
@@ -141,7 +145,10 @@ export function ProductsManager({ products, brands }: Props) {
                           <input type="hidden" name="id" value={row.id} />
                           <ProductFormFields mode="edit" values={row} brands={brands} />
                           <div className="flex gap-2">
-                            <SubmitButton className="h-[38px] rounded-lg bg-zinc-900 px-3 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200">
+                            <SubmitButton
+                              loadingLabel="Saving..."
+                              className="h-[38px] rounded-lg bg-[#245236] px-3 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60"
+                            >
                               Save
                             </SubmitButton>
                             <button
@@ -150,7 +157,7 @@ export function ProductsManager({ products, brands }: Props) {
                                 setEditingId(null);
                                 setRowError(null);
                               }}
-                              className="h-[38px] rounded-lg border border-zinc-300 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                              className="h-[38px] rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
                             >
                               Cancel
                             </button>
@@ -159,27 +166,27 @@ export function ProductsManager({ products, brands }: Props) {
                       </td>
                     ) : (
                       <>
-                        <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                        <td className="px-4 py-3 font-medium text-[#245236]">
                           {row.product_name ?? "—"}
                         </td>
-                        <td className="max-w-[260px] px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[260px] px-4 py-3 text-[#245236]/80">
                           <span className="line-clamp-2">
                             {row.product_description ?? "—"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {brandLabel(row.brand_name)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.style ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.fabric ?? "—"}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
                           {formatDate(row.created_at)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
                           {row.updated_at ? formatDate(row.updated_at) : "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right">
@@ -190,16 +197,17 @@ export function ProductsManager({ products, brands }: Props) {
                                 setRowError(null);
                                 setEditingId(row.id);
                               }}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
                             >
                               Edit
                             </button>
                             <button
                               type="button"
                               onClick={() => runDelete(row.id)}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-400"
+                              disabled={deletingId === row.id}
+                              className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
                             >
-                              Delete
+                              {deletingId === row.id ? "Deleting..." : "Delete"}
                             </button>
                           </div>
                         </td>
@@ -219,14 +227,16 @@ export function ProductsManager({ products, brands }: Props) {
 function SubmitButton({
   children,
   className,
+  loadingLabel = "Loading...",
 }: {
   children: React.ReactNode;
   className?: string;
+  loadingLabel?: string;
 }) {
   const { pending } = useFormStatus();
   return (
     <button type="submit" disabled={pending} className={className}>
-      {pending ? "…" : children}
+      {pending ? loadingLabel : children}
     </button>
   );
 }
@@ -242,23 +252,23 @@ function ProductFormFields({
 }) {
   const v = values;
   const selectClass =
-    "rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
+    "rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
-      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
         Product name
         <input
           name="product_name"
           type="text"
           autoComplete="off"
           defaultValue={v?.product_name ?? ""}
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+          className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
           placeholder="Name"
         />
       </label>
 
-      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
         Brand
         <select name="brand_name" defaultValue={v?.brand_name ?? ""} className={selectClass}>
           <option value="">No brand</option>
@@ -270,42 +280,45 @@ function ProductFormFields({
         </select>
       </label>
 
-      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
         Style
         <input
           name="style"
           type="text"
           autoComplete="off"
           defaultValue={v?.style ?? ""}
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+          className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
           placeholder="Style"
         />
       </label>
 
-      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+      <label className="flex min-w-[220px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
         Fabric
         <input
           name="fabric"
           type="text"
           autoComplete="off"
           defaultValue={v?.fabric ?? ""}
-          className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+          className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
           placeholder="Fabric"
         />
       </label>
 
-      <label className="flex min-w-[280px] flex-1 flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+      <label className="flex min-w-[280px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
         Description
         <textarea
           name="product_description"
           defaultValue={v?.product_description ?? ""}
-          className="min-h-[86px] resize-y rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+          className="min-h-[86px] resize-y rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
           placeholder="Description…"
         />
       </label>
 
       {mode === "create" ? (
-        <SubmitButton className="h-[42px] rounded-lg bg-zinc-900 px-5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200">
+        <SubmitButton
+          loadingLabel="Creating..."
+          className="h-[42px] rounded-lg bg-[#245236] px-5 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60"
+        >
           Create
         </SubmitButton>
       ) : null}

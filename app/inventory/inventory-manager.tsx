@@ -231,8 +231,8 @@ export function InventoryManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+      <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-[#245236]/75">
           {inventories.length === 0
             ? "No inventory rows yet."
             : listSearchLower
@@ -247,7 +247,7 @@ export function InventoryManager({
             setEditingId(null);
             setIsCreateOpen(true);
           }}
-          className="inline-flex h-[38px] items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
         >
           Add new
         </button>
@@ -257,13 +257,13 @@ export function InventoryManager({
         open={isCreateOpen}
         onClose={closeCreateModal}
         title="Add inventory"
-        description="Create a new row in public.Inventory."
+        description="Create a new inventory row."
         panelClassName="max-w-[1100px]"
       >
         {formError ? (
           <p
             role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
           >
             {formError}
           </p>
@@ -300,14 +300,14 @@ export function InventoryManager({
       >
         {createConfirmSummary ? (
           <div className="space-y-4">
-            <dl className="max-h-[min(60vh,28rem)] divide-y divide-zinc-200 overflow-y-auto rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+            <dl className="max-h-[min(60vh,28rem)] divide-y divide-[#245236]/15 overflow-y-auto rounded-lg border border-[#245236]/20">
               {createConfirmSummary.map(({ label, value }) => (
                 <div
                   key={label}
                   className="grid grid-cols-1 gap-0.5 px-3 py-2.5 sm:grid-cols-[minmax(0,42%)_1fr] sm:gap-3"
                 >
-                  <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</dt>
-                  <dd className="break-words text-sm text-zinc-900 dark:text-zinc-100">{value}</dd>
+                  <dt className="text-xs font-medium text-[#245236]/70">{label}</dt>
+                  <dd className="break-words text-sm text-[#245236]">{value}</dd>
                 </div>
               ))}
             </dl>
@@ -320,7 +320,7 @@ export function InventoryManager({
                   setPendingCreateFormData(null);
                   setCreateConfirmSummary(null);
                 }}
-                className="inline-flex h-[38px] items-center justify-center rounded-lg border border-zinc-300 px-4 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                className="inline-flex h-[38px] items-center justify-center rounded-lg border border-[#245236]/30 bg-[#FEED01]/30 px-4 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/50 disabled:opacity-50"
               >
                 Go back
               </button>
@@ -328,7 +328,7 @@ export function InventoryManager({
                 type="button"
                 disabled={createConfirmSubmitting}
                 onClick={() => void handleConfirmCreateInventory()}
-                className="inline-flex h-[38px] items-center justify-center rounded-lg bg-zinc-900 px-4 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200"
+                className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60"
               >
                 {createConfirmSubmitting ? "Creating…" : "Yes, create"}
               </button>
@@ -346,7 +346,7 @@ export function InventoryManager({
         title="Edit inventory"
         description={
           editingRow
-            ? `Update this row in public.Inventory${
+            ? `Update this inventory row${
                 editingRow.inventory_number
                   ? ` (${editingRow.inventory_number})`
                   : ""
@@ -358,7 +358,7 @@ export function InventoryManager({
         {rowError ? (
           <p
             role="alert"
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
           >
             {rowError}
           </p>
@@ -382,7 +382,7 @@ export function InventoryManager({
               restrictEditToEmptyFields={allowRestrictedEdit && !canManage}
             />
             <div className="flex flex-wrap gap-2 pt-2">
-              <SubmitButton className="h-[38px] rounded-lg bg-zinc-900 px-3 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200">
+              <SubmitButton className="h-[38px] rounded-lg bg-[#245236] px-3 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60">
                 Save
               </SubmitButton>
               <button
@@ -391,7 +391,7 @@ export function InventoryManager({
                   setEditingId(null);
                   setRowError(null);
                 }}
-                className="h-[38px] rounded-lg border border-zinc-300 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                className="h-[38px] rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
               >
                 Cancel
               </button>
@@ -403,15 +403,15 @@ export function InventoryManager({
       {rowError && !isEditModalOpen ? (
         <p
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-200"
+          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
         >
           {rowError}
         </p>
       ) : null}
 
       {inventories.length > 0 ? (
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <label className="flex flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+        <section className="rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm">
+          <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
             Search inventory list
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input
@@ -420,40 +420,36 @@ export function InventoryManager({
                 onChange={(e) => setListSearch(e.target.value)}
                 autoComplete="off"
                 placeholder="Search across inventory #, company, transport, agent, waybill, dates, staff, location, invoice, item, payment…"
-                className="min-w-0 flex-1 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
               />
               {listSearch.trim() ? (
                 <button
                   type="button"
                   onClick={() => setListSearch("")}
-                  className="shrink-0 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                  className="shrink-0 rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
                 >
                   Clear
                 </button>
               ) : null}
             </div>
           </label>
-          <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">
-            Matches if your text appears anywhere in those fields (same idea as SQL{" "}
-            <code className="text-[10px]">LIKE &apos;%yourtext%&apos;</code>).
-          </p>
         </section>
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="overflow-hidden rounded-xl border border-[#245236]/20 bg-white shadow-sm">
         {inventories.length === 0 ? (
           <p className="p-8 text-center text-sm text-zinc-500">
             No inventory rows yet.
           </p>
         ) : filteredInventories.length === 0 ? (
           <p className="p-8 text-center text-sm text-zinc-500">
-            No rows match <span className="font-medium text-zinc-700 dark:text-zinc-300">&quot;{listSearch.trim()}&quot;</span>.
+            No rows match <span className="font-medium text-[#245236]">&quot;{listSearch.trim()}&quot;</span>.
             Try a shorter or different term, or clear the search.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[2800px] text-left text-sm">
-              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:border-zinc-800 dark:bg-zinc-950/80 dark:text-zinc-400">
+              <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                 <tr>
                   <th className="px-4 py-3">Inventory #</th>
                   <th className="px-4 py-3">Company</th>
@@ -488,100 +484,100 @@ export function InventoryManager({
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              <tbody className="divide-y divide-[#245236]/15">
                 {filteredInventories.map((row) => (
                   <tr
                     key={row.id}
-                    className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40"
+                    className="hover:bg-[#FEED01]/20"
                   >
-                    <td className="px-4 py-3 font-medium tabular-nums text-zinc-900 dark:text-zinc-100">
+                    <td className="px-4 py-3 font-medium tabular-nums text-[#245236]">
                           {row.inventory_number ?? "—"}
                         </td>
-                        <td className="px-4 py-3 font-medium text-zinc-900 dark:text-zinc-100">
+                        <td className="px-4 py-3 font-medium text-[#245236]">
                           {row.company_name ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {agentLabel(row.agent_name)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {transportLabel(row.transport_name)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.waybill_number ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {formatMaybeNumber(row.transport_charges)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.date_of_entry ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {formatMaybeNumber(row.loading_charges)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {userLabel(row.staff_name)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.location ?? "—"}
                         </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
                           {row.invoice_number ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {itemLabel(row.item_name)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.billed_quantity ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.received_quantity ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.tallying ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.pricing ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.stickering ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.supply ?? "—"}
                         </td>
-                        <td className="max-w-[160px] truncate px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[160px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.stock_note)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {formatMaybeNumber(row.invoice_amount)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.invoice_date ?? "—"}
                         </td>
-                        <td className="max-w-[120px] truncate px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[120px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.invoice_image_url)}
                         </td>
-                        <td className="max-w-[120px] truncate px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[120px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.invoice_pdf_url)}
                         </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.payment_details)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.payment_mode ?? "—"}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.payment_status ?? "—"}
                         </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.debit_note)}
                         </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
                           {previewText(row.comments)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {formatDate(row.created_at)}
                         </td>
-                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                        <td className="px-4 py-3 text-[#245236]/80">
                           {row.updated_at ? formatDate(row.updated_at) : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">
@@ -595,7 +591,7 @@ export function InventoryManager({
                                   setRowError(null);
                                   setEditingId(row.id);
                                 }}
-                                className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
                               >
                                 Edit
                               </button>
@@ -603,14 +599,14 @@ export function InventoryManager({
                                 <button
                                   type="button"
                                   onClick={() => runDelete(row.id)}
-                                  className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline dark:text-red-400"
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
                                 >
                                   Delete
                                 </button>
                               ) : null}
                             </div>
                           ) : (
-                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                            <span className="text-xs text-[#245236]/70">
                               View only
                             </span>
                           )}
@@ -627,11 +623,11 @@ export function InventoryManager({
 }
 
 const fieldLabelClass =
-  "flex w-full max-w-2xl flex-col gap-1 text-xs font-medium text-zinc-600 dark:text-zinc-400";
+  "flex w-full max-w-2xl flex-col gap-1 text-xs font-medium text-[#245236]/80";
 const fieldInputClass =
-  "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none ring-zinc-400 focus:ring-2 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
-const fieldReadOnlyClass = `${fieldInputClass} cursor-not-allowed bg-zinc-100 text-zinc-700 dark:bg-zinc-800/80 dark:text-zinc-300`;
-const fileInputClass = `${fieldInputClass} file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-zinc-800 dark:file:bg-zinc-100 dark:file:text-zinc-900 dark:hover:file:bg-zinc-200`;
+  "w-full rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2";
+const fieldReadOnlyClass = `${fieldInputClass} cursor-not-allowed bg-[#FEED01]/20 text-[#245236]/85`;
+const fileInputClass = `${fieldInputClass} file:mr-3 file:rounded-md file:border-0 file:bg-[#245236] file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-[#FEED01] hover:file:bg-[#1c3f2a]`;
 
 function invHasStr(s: string | null | undefined) {
   return s != null && String(s).trim() !== "";
@@ -687,7 +683,7 @@ function InventoryFormFields({
   return (
     <div className="flex w-full flex-col gap-4">
       {ro ? (
-        <p className="max-w-2xl rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+        <p className="max-w-2xl rounded-md border border-[#245236]/20 bg-[#FEED01]/15 px-3 py-2 text-xs text-[#245236]/80">
           Fields that already have a value are read-only. You can only fill in empty fields.
         </p>
       ) : null}
@@ -770,7 +766,7 @@ function InventoryFormFields({
           type="date"
           defaultValue={v?.date_of_entry ?? ""}
           readOnly={ro && invHasStr(v?.date_of_entry)}
-          className={`${ro && invHasStr(v?.date_of_entry) ? fieldReadOnlyClass : fieldInputClass} dark:[color-scheme:dark]`}
+          className={`${ro && invHasStr(v?.date_of_entry) ? fieldReadOnlyClass : fieldInputClass}`}
         />
       </label>
 
@@ -990,7 +986,7 @@ function InventoryFormFields({
           type="date"
           defaultValue={v?.invoice_date ?? ""}
           readOnly={ro && invHasStr(v?.invoice_date)}
-          className={`${ro && invHasStr(v?.invoice_date) ? fieldReadOnlyClass : fieldInputClass} dark:[color-scheme:dark]`}
+          className={`${ro && invHasStr(v?.invoice_date) ? fieldReadOnlyClass : fieldInputClass}`}
         />
       </label>
 
@@ -1005,12 +1001,12 @@ function InventoryFormFields({
         value={v?.invoice_pdf_url ?? ""}
       />
 
-      <p className="max-w-2xl text-xs text-zinc-500 dark:text-zinc-400">
+      <p className="max-w-2xl text-xs text-[#245236]/70">
         Invoice files upload to your OneDrive (
         <code className="text-[11px]">ONEDRIVE_UPLOAD_FOLDER</code>).{" "}
         <a
           href="/api/auth/microsoft"
-          className="font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+          className="font-medium text-[#245236] underline-offset-2 hover:underline"
         >
           Connect Microsoft
         </a>{" "}
@@ -1020,13 +1016,13 @@ function InventoryFormFields({
       <label className={fieldLabelClass}>
         Invoice image
         {v?.invoice_image_url ? (
-          <span className="font-normal text-zinc-500 dark:text-zinc-400">
+          <span className="font-normal text-[#245236]/70">
             Current:{" "}
             <a
               href={v.invoice_image_url}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+              className="font-medium text-[#245236] underline-offset-2 hover:underline"
             >
               open link
             </a>
@@ -1048,13 +1044,13 @@ function InventoryFormFields({
       <label className={fieldLabelClass}>
         Invoice PDF
         {v?.invoice_pdf_url ? (
-          <span className="font-normal text-zinc-500 dark:text-zinc-400">
+          <span className="font-normal text-[#245236]/70">
             Current:{" "}
             <a
               href={v.invoice_pdf_url}
               target="_blank"
               rel="noreferrer"
-              className="font-medium text-zinc-700 underline-offset-2 hover:underline dark:text-zinc-300"
+              className="font-medium text-[#245236] underline-offset-2 hover:underline"
             >
               open link
             </a>
@@ -1151,7 +1147,7 @@ function InventoryFormFields({
       </label>
 
       {mode === "create" ? (
-        <SubmitButton className="h-[42px] w-full max-w-2xl rounded-lg bg-zinc-900 px-5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-200">
+        <SubmitButton className="h-[42px] w-full max-w-2xl rounded-lg bg-[#245236] px-5 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60">
           Create
         </SubmitButton>
       ) : null}
@@ -1220,14 +1216,16 @@ function ForeignKeySelect<T extends { id: string }>({
 function SubmitButton({
   children,
   className,
+  loadingLabel = "Loading...",
 }: {
   children: React.ReactNode;
   className?: string;
+  loadingLabel?: string;
 }) {
   const { pending } = useFormStatus();
   return (
     <button type="submit" disabled={pending} className={className}>
-      {pending ? "…" : children}
+      {pending ? loadingLabel : children}
     </button>
   );
 }
@@ -1243,7 +1241,6 @@ function formatDate(iso: string) {
   }
 }
 
-/** Substring match on each field (same idea as SQL LIKE '%needle%'), case-insensitive. */
 function inventoryRowMatchesLikeSearch(
   row: InventoryRow,
   needleLower: string,

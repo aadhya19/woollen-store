@@ -27,6 +27,17 @@ function parseOptionalFloat(
   return { n, error: null };
 }
 
+function parseOptionalInt(
+  value: FormDataEntryValue | null,
+): { n: number | null; error: string | null } {
+  const s = value?.toString().trim();
+  if (!s) return { n: null, error: null };
+  if (!/^-?\d+$/.test(s)) return { n: null, error: "Pieces must be a whole number" };
+  const n = Number(s);
+  if (!Number.isSafeInteger(n)) return { n: null, error: "Pieces is out of range" };
+  return { n, error: null };
+}
+
 function mapSupabaseError(message: string) {
   if (message.includes("row-level security")) {
     return `${message} Enable INSERT/UPDATE/DELETE policies for the anon (or authenticated) role on Stock.`;
@@ -230,6 +241,8 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
 
   const { n: mrp, error: mrpErr } = parseOptionalFloat(formData.get("mrp"));
   if (mrpErr) return { error: mrpErr };
+  const { n: pieces, error: piecesErr } = parseOptionalInt(formData.get("pieces"));
+  if (piecesErr) return { error: piecesErr };
 
   const supabase = createSupabase();
   const { fks, error: fkErr } = await parseStockFksFromForm(supabase, formData);
@@ -244,6 +257,7 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
     cost_price,
     selling_price,
     mrp,
+    pieces,
     size,
   });
 
@@ -261,6 +275,7 @@ type StockParsed = StockFks & {
   cost_price: number | null;
   selling_price: number | null;
   mrp: number | null;
+  pieces: number | null;
 };
 
 function stockStrEmpty(v: string | null | undefined): boolean {
@@ -300,6 +315,7 @@ function mergeStockForRestrictedUser(
         ? next.selling_price
         : (g("selling_price") as number | null),
     mrp: g("mrp") == null ? next.mrp : (g("mrp") as number | null),
+    pieces: g("pieces") == null ? next.pieces : (g("pieces") as number | null),
   };
 }
 
@@ -332,6 +348,8 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
 
   const { n: mrp, error: mrpErr } = parseOptionalFloat(formData.get("mrp"));
   if (mrpErr) return { error: mrpErr };
+  const { n: pieces, error: piecesErr } = parseOptionalInt(formData.get("pieces"));
+  if (piecesErr) return { error: piecesErr };
 
   const supabase = createSupabase();
   const { fks, error: fkErr } = await parseStockFksFromForm(supabase, formData);
@@ -347,6 +365,7 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
     cost_price,
     selling_price,
     mrp,
+    pieces,
   };
 
   if (isAdmin) {
@@ -366,7 +385,7 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
   const { data: existing, error: fetchErr } = await supabase
     .from("Stock")
     .select(
-      "stock_number, inventory_number, brand_name, product, HSN_code, GST_group, cost_price, selling_price, mrp, size",
+      "stock_number, inventory_number, brand_name, product, HSN_code, GST_group, cost_price, selling_price, mrp, pieces, size",
     )
     .eq("id", id)
     .maybeSingle();

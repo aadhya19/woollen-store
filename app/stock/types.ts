@@ -9,6 +9,7 @@ export type StockRow = {
   cost_price: number | null;
   selling_price: number | null;
   mrp: number | null;
+  pieces: number | null;
   size: string | null;
   created_at: string;
   updated_at: string | null;

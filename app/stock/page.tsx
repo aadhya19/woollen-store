@@ -37,7 +37,7 @@ export default async function StockPage() {
     supabase
       .from("Stock")
       .select(
-        "id, stock_number, inventory_number, brand_name, product, HSN_code, GST_group, cost_price, selling_price, mrp, size, created_at, updated_at",
+        "id, stock_number, inventory_number, brand_name, product, HSN_code, GST_group, cost_price, selling_price, mrp, pieces, size, created_at, updated_at",
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -120,23 +120,13 @@ export default async function StockPage() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Stock"
-        description={
-          <>
-            {session.role === "admin"
-              ? "Full CRUD"
-              : "Create rows and edit only empty fields on existing rows."}{" "}
-            for <code className="text-xs">public.Stock</code>. Foreign keys:{" "}
-            <code className="text-xs">inventory_number</code> → Inventory,{" "}
-            <code className="text-xs">brand_name</code> → Brand,{" "}
-            <code className="text-xs">product</code> → Products (matched or created from name, description, style, and fabric for the chosen brand).
-          </>
-        }
+        description=""
       />
 
       {errorMessage ? (
         <div
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
         >
           <p className="font-medium">Could not load stock</p>
           <p className="mt-1 opacity-90">{errorMessage}</p>

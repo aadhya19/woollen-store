@@ -1,7 +1,7 @@
 import { createSupabase } from "@/lib/supabase";
 import { requireAuth } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
-import { InventoryManager } from "./inventory-manager";
+import  { InventoryManager } from "./inventory-manager";
 import type {
   AgentLookupRow,
   ProductLookupRow,
@@ -53,20 +53,13 @@ export default async function InventoryPage() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="Inventory"
-        description={
-          <>
-            {session.role === "admin"
-              ? "Full CRUD"
-              : "Create rows and edit only empty fields on existing rows."}{" "}
-            for <code className="text-xs">public.Inventory</code> (with FK dropdowns).
-          </>
-        }
+        description=""
       />
 
       {error ? (
         <div
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
         >
           <p className="font-medium">Could not load inventory data</p>
           <p className="mt-1 opacity-90">{error.message}</p>
