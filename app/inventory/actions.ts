@@ -449,6 +449,9 @@ export async function updateInventory(
     return { error: "You do not have permission to perform this action." };
   }
   const isAdmin = session.role === "admin";
+  if (!isAdmin && !session.userId) {
+    return { error: "User identity missing. Please log in again." };
+  }
 
   const id = formData.get("id")?.toString() ?? "";
   if (!id) return { error: "Missing inventory id" };
@@ -559,6 +562,7 @@ export async function updateInventory(
     .from("Inventory")
     .select("*")
     .eq("id", id)
+    .eq("staff_name", session.userId)
     .maybeSingle();
 
   if (fetchErr) return { error: mapSupabaseError(fetchErr.message) };
@@ -575,7 +579,8 @@ export async function updateInventory(
       ...merged,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("staff_name", session.userId);
 
   if (error) return { error: mapSupabaseError(error.message) };
   revalidatePath("/inventory");

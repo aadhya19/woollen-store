@@ -6,6 +6,8 @@ export type UserRole = "admin" | "user";
 
 type AuthPayload = {
   role: UserRole;
+  userId: string;
+  userName: string;
   exp: number;
 };
 
@@ -29,9 +31,11 @@ function sign(value: string) {
   return createHmac("sha256", getAuthSecret()).update(value).digest("base64url");
 }
 
-export function createAuthToken(role: UserRole) {
+export function createAuthToken(role: UserRole, userId: string, userName: string) {
   const payload: AuthPayload = {
     role,
+    userId,
+    userName,
     exp: Date.now() + ONE_WEEK_SECONDS * 1000,
   };
   const payloadText = base64UrlEncode(JSON.stringify(payload));
@@ -51,7 +55,14 @@ function parseAuthToken(token: string): AuthPayload | null {
 
   try {
     const payload = JSON.parse(base64UrlDecode(payloadText)) as AuthPayload;
-    if ((payload.role !== "admin" && payload.role !== "user") || !payload.exp) {
+    if (
+      (payload.role !== "admin" && payload.role !== "user") ||
+      !payload.exp ||
+      typeof payload.userId !== "string" ||
+      !payload.userId.trim() ||
+      typeof payload.userName !== "string" ||
+      !payload.userName.trim()
+    ) {
       return null;
     }
     if (Date.now() > payload.exp) return null;
@@ -61,9 +72,13 @@ function parseAuthToken(token: string): AuthPayload | null {
   }
 }
 
-export async function setAuthCookie(role: UserRole) {
+export async function setAuthCookie(
+  role: UserRole,
+  userId: string,
+  userName: string,
+) {
   const jar = await cookies();
-  jar.set(AUTH_COOKIE_NAME, createAuthToken(role), {
+  jar.set(AUTH_COOKIE_NAME, createAuthToken(role, userId, userName), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -77,13 +92,17 @@ export async function clearAuthCookie() {
   jar.delete(AUTH_COOKIE_NAME);
 }
 
-export async function getAuthSession(): Promise<{ role: UserRole } | null> {
+export async function getAuthSession(): Promise<{
+  role: UserRole;
+  userId: string;
+  userName: string;
+} | null> {
   const jar = await cookies();
   const token = jar.get(AUTH_COOKIE_NAME)?.value;
   if (!token) return null;
   const payload = parseAuthToken(token);
   if (!payload) return null;
-  return { role: payload.role };
+  return { role: payload.role, userId: payload.userId, userName: payload.userName };
 }
 
 export async function requireAuth(allowedRoles?: UserRole[]) {

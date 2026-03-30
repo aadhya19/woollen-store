@@ -157,6 +157,11 @@ export function StockManager({
     );
   }, [stock, searchPrefixLower, selectedInventory]);
 
+  const editingRow = useMemo(() => {
+    if (!editingId) return null;
+    return stock.find((row) => row.id === editingId) ?? null;
+  }, [stock, editingId]);
+
   const prefixMatchedStockOnly = useMemo(() => {
     if (!searchPrefixLower) return [];
     return stock.filter((row) =>
@@ -446,6 +451,57 @@ export function StockManager({
         ) : null}
       </Modal>
 
+      <Modal
+        open={Boolean(editingRow)}
+        onClose={() => {
+          setEditingId(null);
+          setRowError(null);
+        }}
+        title="Edit stock item"
+        description={
+          editingRow?.stock_number?.trim()
+            ? `Update stock row ${editingRow.stock_number}.`
+            : "Update this stock row."
+        }
+        panelClassName="max-w-[1100px]"
+      >
+        {rowError ? (
+          <p
+            role="alert"
+            className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+          >
+            {rowError}
+          </p>
+        ) : null}
+        {editingRow ? (
+          <form action={runUpdate} className="mt-4 space-y-3">
+            <input type="hidden" name="id" value={editingRow.id} />
+            <StockFormFields
+              mode="edit"
+              values={editingRow}
+              products={products}
+              brands={brands}
+              restrictEditToEmptyFields={allowRestrictedEdit && !canManage}
+            />
+            <div className="flex gap-2">
+              <SubmitButton className="h-[38px] rounded-lg bg-[#245236] px-3 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60">
+                Save
+              </SubmitButton>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingId(null);
+                  setRowError(null);
+                }}
+                className="h-[38px] rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : null}
+      </Modal>
+
       {rowError ? (
         <p
           role="alert"
@@ -536,8 +592,90 @@ export function StockManager({
                   : "No stock rows start with this prefix yet."}
               </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-left text-sm">
+              <>
+                <div className="divide-y divide-[#245236]/15 md:hidden">
+                  {filteredStock.map((row) => (
+                    <article key={row.id} className="space-y-3 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Stock #</p>
+                          <p className="text-sm font-semibold text-[#245236]">
+                            {row.stock_number ?? "—"}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-[#245236]/70">Inventory #</p>
+                          <p className="text-sm font-medium text-[#245236]">
+                            {row.inventory_number ?? "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Product</p>
+                          <p className="text-[#245236]/85">
+                            {productById.get(row.product ?? "")?.product_name?.trim() ||
+                              productRowLabel(row)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Brand</p>
+                          <p className="text-[#245236]/85">{brandLabel(row.brand_name)}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-xs text-[#245236]/70">Pricing</p>
+                          <p className="text-[#245236]/85">
+                            C: {formatNumber(row.cost_price)} / S:{" "}
+                            {formatNumber(row.selling_price)} / M: {formatNumber(row.mrp)}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Created</p>
+                          <p className="text-[#245236]/85">{formatDate(row.created_at)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Updated</p>
+                          <p className="text-[#245236]/85">
+                            {row.updated_at ? formatDate(row.updated_at) : "—"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        {canManage || allowRestrictedEdit ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setRowError(null);
+                                setEditingId(row.id);
+                              }}
+                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                            >
+                              Edit
+                            </button>
+                            {canManage ? (
+                              <button
+                                type="button"
+                                onClick={() => runDelete(row.id)}
+                                disabled={deletingId === row.id}
+                                className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
+                              >
+                                {deletingId === row.id ? "Deleting..." : "Delete"}
+                              </button>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="text-xs text-[#245236]/70">View only</span>
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[960px] text-left text-sm">
                   <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                     <tr>
                       <th className="px-4 py-3">Stock #</th>
@@ -556,98 +694,67 @@ export function StockManager({
                         key={row.id}
                         className="hover:bg-[#FEED01]/20"
                       >
-                        {(canManage || allowRestrictedEdit) && editingId === row.id ? (
-                          <td colSpan={8} className="px-4 py-3">
-                            <form action={runUpdate} className="space-y-3">
-                              <input type="hidden" name="id" value={row.id} />
-                              <StockFormFields
-                                mode="edit"
-                                values={row}
-                                products={products}
-                                brands={brands}
-                                restrictEditToEmptyFields={
-                                  allowRestrictedEdit && !canManage
-                                }
-                              />
-                              <div className="flex gap-2">
-                                <SubmitButton className="h-[38px] rounded-lg bg-[#245236] px-3 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60">
-                                  Save
-                                </SubmitButton>
+                        <>
+                          <td className="px-4 py-3 font-medium text-[#245236]">
+                            {row.stock_number ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 font-medium tabular-nums text-[#245236]/90">
+                            {row.inventory_number ?? "—"}
+                          </td>
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            {productById.get(row.product ?? "")?.product_name?.trim() ||
+                              productRowLabel(row)}
+                          </td>
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            {brandLabel(row.brand_name)}
+                          </td>
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            C: {formatNumber(row.cost_price)} / S:{" "}
+                            {formatNumber(row.selling_price)} / M: {formatNumber(row.mrp)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
+                            {formatDate(row.created_at)}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
+                            {row.updated_at ? formatDate(row.updated_at) : "—"}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3 text-right">
+                            {canManage || allowRestrictedEdit ? (
+                              <div className="flex justify-end gap-2">
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    setEditingId(null);
                                     setRowError(null);
+                                    setEditingId(row.id);
                                   }}
-                                  className="h-[38px] rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
                                 >
-                                  Cancel
+                                  Edit
                                 </button>
-                              </div>
-                            </form>
-                          </td>
-                        ) : (
-                          <>
-                            <td className="px-4 py-3 font-medium text-[#245236]">
-                              {row.stock_number ?? "—"}
-                            </td>
-                            <td className="px-4 py-3 font-medium tabular-nums text-[#245236]/90">
-                              {row.inventory_number ?? "—"}
-                            </td>
-                            <td className="px-4 py-3 text-[#245236]/80">
-                              {productById.get(row.product ?? "")?.product_name?.trim() ||
-                                productRowLabel(row)}
-                            </td>
-                            <td className="px-4 py-3 text-[#245236]/80">
-                              {brandLabel(row.brand_name)}
-                            </td>
-                            <td className="px-4 py-3 text-[#245236]/80">
-                              C: {formatNumber(row.cost_price)} / S:{" "}
-                              {formatNumber(row.selling_price)} / M: {formatNumber(row.mrp)}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                              {formatDate(row.created_at)}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                              {row.updated_at ? formatDate(row.updated_at) : "—"}
-                            </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-right">
-                              {canManage || allowRestrictedEdit ? (
-                                <div className="flex justify-end gap-2">
+                                {canManage ? (
                                   <button
                                     type="button"
-                                    onClick={() => {
-                                      setRowError(null);
-                                      setEditingId(row.id);
-                                    }}
-                                    className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                                    onClick={() => runDelete(row.id)}
+                                    disabled={deletingId === row.id}
+                                    className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
                                   >
-                                    Edit
+                                    {deletingId === row.id ? "Deleting..." : "Delete"}
                                   </button>
-                                  {canManage ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => runDelete(row.id)}
-                                      disabled={deletingId === row.id}
-                                      className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
-                                    >
-                                      {deletingId === row.id ? "Deleting..." : "Delete"}
-                                    </button>
-                                  ) : null}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-[#245236]/70">
-                                  View only
-                                </span>
-                              )}
-                            </td>
-                          </>
-                        )}
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-[#245236]/70">
+                                View only
+                              </span>
+                            )}
+                          </td>
+                        </>
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         </div>

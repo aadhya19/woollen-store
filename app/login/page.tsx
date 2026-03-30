@@ -51,7 +51,6 @@ export default async function LoginPage({ searchParams }: Props) {
               name="username"
               type="text"
               autoComplete="username"
-              defaultValue="admin"
               className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
             />
           </label>
@@ -62,7 +61,6 @@ export default async function LoginPage({ searchParams }: Props) {
               name="password"
               type="password"
               autoComplete="current-password"
-              defaultValue="test123"
               className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
             />
           </label>

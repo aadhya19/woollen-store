@@ -15,7 +15,7 @@ export async function login(formData: FormData) {
 
   const { data: user, error: userError } = await supabase
     .from("Users")
-    .select("id, role")
+    .select("id, role, name")
     .eq("username", username)
     .eq("password", password)
     .maybeSingle();
@@ -44,7 +44,7 @@ export async function login(formData: FormData) {
     redirect("/login?error=role");
   }
 
-  await setAuthCookie(role);
+  await setAuthCookie(role, user.id, user.name?.trim() || username);
   redirect("/");
 }
 

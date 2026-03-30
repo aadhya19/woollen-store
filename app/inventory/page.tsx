@@ -15,15 +15,19 @@ export const dynamic = "force-dynamic";
 export default async function InventoryPage() {
   const session = await requireAuth(["admin", "user"]);
   const supabase = createSupabase();
+  const inventoriesQuery = supabase
+    .from("Inventory")
+    .select(
+      "id, inventory_number, company_name, agent_name, transport_name, waybill_number, transport_charges, date_of_entry, loading_charges, staff_name, location, invoice_number, item_name, billed_quantity, received_quantity, tallying, pricing, stickering, supply, stock_note, created_at, updated_at, invoice_amount, invoice_date, invoice_image_url, invoice_pdf_url, payment_details, payment_mode, payment_status, debit_note, comments",
+    )
+    .order("created_at", { ascending: false });
+  if (session.role === "user") {
+    inventoriesQuery.eq("staff_name", session.userId);
+  }
 
   const [inventoriesRes, itemsRes, agentsRes, transportsRes, usersRes] =
     await Promise.all([
-      supabase
-        .from("Inventory")
-        .select(
-          "id, inventory_number, company_name, agent_name, transport_name, waybill_number, transport_charges, date_of_entry, loading_charges, staff_name, location, invoice_number, item_name, billed_quantity, received_quantity, tallying, pricing, stickering, supply, stock_note, created_at, updated_at, invoice_amount, invoice_date, invoice_image_url, invoice_pdf_url, payment_details, payment_mode, payment_status, debit_note, comments",
-        )
-        .order("created_at", { ascending: false }),
+      inventoriesQuery,
       supabase
         .from("Products")
         .select("id, product_name")

@@ -447,8 +447,95 @@ export function InventoryManager({
             Try a shorter or different term, or clear the search.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[2800px] text-left text-sm">
+          <>
+            <div className="divide-y divide-[#245236]/15 md:hidden">
+              {filteredInventories.map((row) => (
+                <article key={row.id} className="space-y-3 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Inventory #</p>
+                      <p className="text-sm font-semibold text-[#245236]">
+                        {row.inventory_number ?? "—"}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-[#245236]/70">Company</p>
+                      <p className="text-sm text-[#245236]/85">{row.company_name ?? "—"}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Agent</p>
+                      <p className="text-[#245236]/85">{agentLabel(row.agent_name)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Transport</p>
+                      <p className="text-[#245236]/85">{transportLabel(row.transport_name)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Invoice #</p>
+                      <p className="text-[#245236]/85">{row.invoice_number ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Item</p>
+                      <p className="text-[#245236]/85">{itemLabel(row.item_name)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Entry date</p>
+                      <p className="text-[#245236]/85">{row.date_of_entry ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Location</p>
+                      <p className="text-[#245236]/85">{row.location ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Created</p>
+                      <p className="text-[#245236]/85">{formatDate(row.created_at)}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Updated</p>
+                      <p className="text-[#245236]/85">
+                        {row.updated_at ? formatDate(row.updated_at) : "—"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    {canManage || allowRestrictedEdit ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormError(null);
+                            closeCreateModal();
+                            setRowError(null);
+                            setEditingId(row.id);
+                          }}
+                          className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                        >
+                          Edit
+                        </button>
+                        {canManage ? (
+                          <button
+                            type="button"
+                            onClick={() => runDelete(row.id)}
+                            className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
+                          >
+                            Delete
+                          </button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="text-xs text-[#245236]/70">View only</span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[2800px] text-left text-sm">
               <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                 <tr>
                   <th className="px-4 py-3">Inventory #</th>
@@ -614,8 +701,9 @@ export function InventoryManager({
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
