@@ -76,8 +76,8 @@ function buildCreateInventorySummary(
     { label: "Invoice amount", value: fdCell(fd.get("invoice_amount")) },
     { label: "Invoice date", value: fdCell(fd.get("invoice_date")) },
     { label: "Invoice image (file)", value: fdCell(fd.get("invoice_image_file")) },
-    { label: "Invoice PDF (file)", value: fdCell(fd.get("invoice_pdf_file")) },
-    { label: "Comments", value: fdCell(fd.get("comments")) },
+    { label: "Product image (file)", value: fdCell(fd.get("product_image_file")) },
+    { label: "Debit note (file)", value: fdCell(fd.get("debit_note_file")) },
   ];
   if (!includePaymentFields) return base;
   return [
@@ -249,12 +249,11 @@ export function InventoryManager({
       "Invoice amount",
       "Invoice date",
       "Invoice image URL",
-      "Invoice PDF URL",
+      "Product image URL",
       "Payment details",
       "Payment mode",
       "Payment status",
       "Debit note",
-      "Comments",
     ];
 
     const csvRows = filteredByAdminControls.map((row) =>
@@ -281,12 +280,11 @@ export function InventoryManager({
         row.invoice_amount,
         row.invoice_date,
         row.invoice_image_url,
-        row.invoice_pdf_url,
+        row.product_image,
         row.payment_details,
         row.payment_mode,
         row.payment_status,
         row.debit_note,
-        row.comments,
       ].map(toCsvCell),
     );
 
@@ -665,12 +663,11 @@ export function InventoryManager({
                   <th className="px-4 py-3">Inv. amount</th>
                   <th className="px-4 py-3">Inv. date</th>
                   <th className="px-4 py-3">Inv. image</th>
-                  <th className="px-4 py-3">Inv. PDF</th>
+                  <th className="px-4 py-3">Product image</th>
                   {canManage ? <th className="px-4 py-3">Pay details</th> : null}
                   {canManage ? <th className="px-4 py-3">Pay mode</th> : null}
                   {canManage ? <th className="px-4 py-3">Pay status</th> : null}
                   <th className="px-4 py-3">Debit note</th>
-                  <th className="px-4 py-3">Comments</th>
                   <th className="px-4 py-3">Created</th>
                   <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -742,11 +739,11 @@ export function InventoryManager({
                         <td className="px-4 py-3 text-[#245236]/80">
                           {row.invoice_date ?? "—"}
                         </td>
-                        <td className="max-w-[120px] truncate px-4 py-3 text-[#245236]/80">
-                          {previewText(row.invoice_image_url)}
+                        <td className="px-4 py-3 text-[#245236]/80">
+                          {linkCellButton(row.invoice_image_url)}
                         </td>
-                        <td className="max-w-[120px] truncate px-4 py-3 text-[#245236]/80">
-                          {previewText(row.invoice_pdf_url)}
+                        <td className="px-4 py-3 text-[#245236]/80">
+                          {linkCellButton(row.product_image)}
                         </td>
                         {canManage ? (
                           <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
@@ -763,11 +760,8 @@ export function InventoryManager({
                             {row.payment_status ?? "—"}
                           </td>
                         ) : null}
-                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
-                          {previewText(row.debit_note)}
-                        </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
-                          {previewText(row.comments)}
+                        <td className="px-4 py-3 text-[#245236]/80">
+                          {linkCellButton(row.debit_note)}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
                           {formatDate(row.created_at)}
@@ -976,7 +970,6 @@ function InventoryFormFields({
         defaultId={v?.staff_name ?? ""}
         getLabel={(u) => u.name}
         label="Staff"
-        required
         readOnly={ro && invHasStr(v?.staff_name)}
       />
 
@@ -1065,90 +1058,58 @@ function InventoryFormFields({
 
       <label className={fieldLabelClass}>
         Tallying
-        {ro && invHasStr(v?.tallying) ? (
-          <LockedSelectValue
-            name="tallying"
-            value={v?.tallying ?? ""}
-            label={v?.tallying ?? "—"}
-          />
-        ) : (
-          <select
-            name="tallying"
-            defaultValue={v?.tallying ?? ""}
-            className={fieldInputClass}
-          >
-            <option value="">—</option>
-            <option value="NOT STARTED">NOT STARTED</option>
-            <option value="NOT TALLYING">NOT TALLYING</option>
-            <option value="TALLIED">TALLIED</option>
-          </select>
-        )}
+        <select
+          name="tallying"
+          defaultValue={v?.tallying ?? ""}
+          className={fieldInputClass}
+        >
+          <option value="">—</option>
+          <option value="NOT STARTED">NOT STARTED</option>
+          <option value="NOT TALLYING">NOT TALLYING</option>
+          <option value="TALLIED">TALLIED</option>
+        </select>
       </label>
 
       <label className={fieldLabelClass}>
         Pricing
-        {ro && invHasStr(v?.pricing) ? (
-          <LockedSelectValue
-            name="pricing"
-            value={v?.pricing ?? ""}
-            label={v?.pricing ?? "—"}
-          />
-        ) : (
-          <select
-            name="pricing"
-            defaultValue={v?.pricing ?? ""}
-            className={fieldInputClass}
-          >
-            <option value="">—</option>
-            <option value="PENDING">PENDING</option>
-            <option value="IN PROGRESS">IN PROGRESS</option>
-            <option value="DONE">DONE</option>
-          </select>
-        )}
+        <select
+          name="pricing"
+          defaultValue={v?.pricing ?? ""}
+          className={fieldInputClass}
+        >
+          <option value="">—</option>
+          <option value="PENDING">PENDING</option>
+          <option value="IN PROGRESS">IN PROGRESS</option>
+          <option value="DONE">DONE</option>
+        </select>
       </label>
 
       <label className={fieldLabelClass}>
         Stickering
-        {ro && invHasStr(v?.stickering) ? (
-          <LockedSelectValue
-            name="stickering"
-            value={v?.stickering ?? ""}
-            label={v?.stickering ?? "—"}
-          />
-        ) : (
-          <select
-            name="stickering"
-            defaultValue={v?.stickering ?? ""}
-            className={fieldInputClass}
-          >
-            <option value="">—</option>
-            <option value="PENDING">PENDING</option>
-            <option value="IN PROGRESS">IN PROGRESS</option>
-            <option value="DONE">DONE</option>
-          </select>
-        )}
+        <select
+          name="stickering"
+          defaultValue={v?.stickering ?? ""}
+          className={fieldInputClass}
+        >
+          <option value="">—</option>
+          <option value="PENDING">PENDING</option>
+          <option value="IN PROGRESS">IN PROGRESS</option>
+          <option value="DONE">DONE</option>
+        </select>
       </label>
 
       <label className={fieldLabelClass}>
         Supply
-        {ro && invHasStr(v?.supply) ? (
-          <LockedSelectValue
-            name="supply"
-            value={v?.supply ?? ""}
-            label={v?.supply ?? "—"}
-          />
-        ) : (
-          <select
-            name="supply"
-            defaultValue={v?.supply ?? ""}
-            className={fieldInputClass}
-          >
-            <option value="">—</option>
-            <option value="PENDING">PENDING</option>
-            <option value="IN PROGRESS">IN PROGRESS</option>
-            <option value="DONE">DONE</option>
-          </select>
-        )}
+        <select
+          name="supply"
+          defaultValue={v?.supply ?? ""}
+          className={fieldInputClass}
+        >
+          <option value="">—</option>
+          <option value="PENDING">PENDING</option>
+          <option value="IN PROGRESS">IN PROGRESS</option>
+          <option value="DONE">DONE</option>
+        </select>
       </label>
 
       <label className={fieldLabelClass}>
@@ -1181,11 +1142,8 @@ function InventoryFormFields({
         name="invoice_image_url"
         value={v?.invoice_image_url ?? ""}
       />
-      <input
-        type="hidden"
-        name="invoice_pdf_url"
-        value={v?.invoice_pdf_url ?? ""}
-      />
+      <input type="hidden" name="product_image" value={v?.product_image ?? ""} />
+      <input type="hidden" name="debit_note" value={v?.debit_note ?? ""} />
 
       <p className="max-w-2xl text-xs text-[#245236]/70">
         Invoice files upload to your OneDrive (
@@ -1228,28 +1186,28 @@ function InventoryFormFields({
       </label>
 
       <label className={fieldLabelClass}>
-        Invoice PDF
-        {v?.invoice_pdf_url ? (
+        Product image
+        {v?.product_image ? (
           <span className="font-normal text-[#245236]/70">
             Current:{" "}
             <a
-              href={v.invoice_pdf_url}
+              href={v.product_image}
               target="_blank"
               rel="noreferrer"
               className="font-medium text-[#245236] underline-offset-2 hover:underline"
             >
               open link
             </a>
-            {ro && invHasStr(v.invoice_pdf_url)
+            {ro && invHasStr(v.product_image)
               ? null
               : " — choose a file below to replace."}
           </span>
         ) : null}
-        {!(ro && invHasStr(v?.invoice_pdf_url)) ? (
+        {!(ro && invHasStr(v?.product_image)) ? (
           <input
-            name="invoice_pdf_file"
+            name="product_image_file"
             type="file"
-            accept="application/pdf,.pdf"
+            accept="image/*"
             className={fileInputClass}
           />
         ) : null}
@@ -1318,22 +1276,29 @@ function InventoryFormFields({
 
       <label className={fieldLabelClass}>
         Debit note
-        <textarea
-          name="debit_note"
-          defaultValue={v?.debit_note ?? ""}
-          readOnly={ro && invHasStr(v?.debit_note)}
-          className={`min-h-[72px] resize-y ${ro && invHasStr(v?.debit_note) ? fieldReadOnlyClass : fieldInputClass}`}
-        />
-      </label>
-
-      <label className={fieldLabelClass}>
-        Comments
-        <textarea
-          name="comments"
-          defaultValue={v?.comments ?? ""}
-          readOnly={ro && invHasStr(v?.comments)}
-          className={`min-h-[86px] resize-y ${ro && invHasStr(v?.comments) ? fieldReadOnlyClass : fieldInputClass}`}
-        />
+        {v?.debit_note ? (
+          <span className="font-normal text-[#245236]/70">
+            Current:{" "}
+            <a
+              href={v.debit_note}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-[#245236] underline-offset-2 hover:underline"
+            >
+              open link
+            </a>
+            {ro && invHasStr(v.debit_note)
+              ? null
+              : " — choose a file below to replace."}
+          </span>
+        ) : null}
+        {!(ro && invHasStr(v?.debit_note)) ? (
+          <input
+            name="debit_note_file"
+            type="file"
+            className={fileInputClass}
+          />
+        ) : null}
       </label>
 
       {mode === "create" ? (
@@ -1480,6 +1445,21 @@ function previewText(s: string | null | undefined, max = 48) {
   if (!s?.trim()) return "—";
   const t = s.trim();
   return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
+
+function linkCellButton(url: string | null | undefined) {
+  const href = url?.trim();
+  if (!href) return "—";
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center rounded-md bg-[#245236] px-2.5 py-1 text-xs font-medium text-[#FEED01] hover:bg-[#1c3f2a]"
+    >
+      Open
+    </a>
+  );
 }
 
 function toCsvCell(value: string | number | null | undefined) {

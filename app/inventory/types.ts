@@ -23,12 +23,11 @@ export type InventoryRow = {
   invoice_amount: number | null;
   invoice_date: string | null;
   invoice_image_url: string | null;
-  invoice_pdf_url: string | null;
+  product_image: string | null;
   payment_details: string | null;
   payment_mode: string | null;
   payment_status: string | null;
   debit_note: string | null;
-  comments: string | null;
 };
 
 export type AgentLookupRow = {

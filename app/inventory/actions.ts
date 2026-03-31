@@ -33,7 +33,7 @@ function parseOptionalBigInt(
   return { n: s, error: null };
 }
 
-const MAX_INVOICE_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_UPLOAD_FILE_BYTES = 10 * 1024 * 1024;
 
 function isImageFile(file: File) {
   const mime = (file.type || "").toLowerCase();
@@ -41,26 +41,28 @@ function isImageFile(file: File) {
   return /\.(png|jpe?g|webp|gif)$/i.test(file.name);
 }
 
-function isPdfFile(file: File) {
-  const mime = (file.type || "").toLowerCase();
-  if (mime === "application/pdf") return true;
-  return file.name.toLowerCase().endsWith(".pdf");
-}
-
-type InvoiceUrlsResult = {
+type DocumentUrlsResult = {
   invoice_image_url: string | null;
-  invoice_pdf_url: string | null;
+  product_image: string | null;
+  debit_note: string | null;
   error: string | null;
 };
 
-async function resolveInvoiceUrlsFromForm(
+async function resolveDocumentUrlsFromForm(
   formData: FormData,
-): Promise<InvoiceUrlsResult> {
+  canUploadDebitNote: boolean,
+): Promise<DocumentUrlsResult> {
   const cookieStore = await cookies();
   const imageFile = formData.get("invoice_image_file");
-  const pdfFile = formData.get("invoice_pdf_file");
+  const productImageFile = formData.get("product_image_file");
+  const debitNoteFile = formData.get("debit_note_file");
   const uploadImage = imageFile instanceof File && imageFile.size > 0;
-  const uploadPdf = pdfFile instanceof File && pdfFile.size > 0;
+  const uploadProductImage =
+    productImageFile instanceof File && productImageFile.size > 0;
+  const uploadDebitNote =
+    canUploadDebitNote &&
+    debitNoteFile instanceof File &&
+    debitNoteFile.size > 0;
 
   let accessToken: string | null | undefined;
   async function getToken(): Promise<string | null> {
@@ -74,14 +76,16 @@ async function resolveInvoiceUrlsFromForm(
     if (!isImageFile(imageFile)) {
       return {
         invoice_image_url: null,
-        invoice_pdf_url: null,
+        product_image: null,
+        debit_note: null,
         error: "Invoice image must be an image file (e.g. PNG, JPEG, WebP).",
       };
     }
-    if (imageFile.size > MAX_INVOICE_FILE_BYTES) {
+    if (imageFile.size > MAX_UPLOAD_FILE_BYTES) {
       return {
         invoice_image_url: null,
-        invoice_pdf_url: null,
+        product_image: null,
+        debit_note: null,
         error: "Invoice image is too large. Maximum size is 10 MB.",
       };
     }
@@ -89,7 +93,8 @@ async function resolveInvoiceUrlsFromForm(
     if (!token) {
       return {
         invoice_image_url: null,
-        invoice_pdf_url: null,
+        product_image: null,
+        debit_note: null,
         error:
           "Sign in with Microsoft to upload invoice files — use Connect Microsoft on the Documents page.",
       };
@@ -104,68 +109,132 @@ async function resolveInvoiceUrlsFromForm(
       if (!uploaded.webUrl) {
         return {
           invoice_image_url: null,
-          invoice_pdf_url: null,
+          product_image: null,
+          debit_note: null,
           error: "OneDrive did not return a link for the invoice image.",
         };
       }
       invoice_image_url = uploaded.webUrl;
     } catch (e) {
       const message = e instanceof Error ? e.message : "Invoice image upload failed";
-      return { invoice_image_url: null, invoice_pdf_url: null, error: message };
+      return {
+        invoice_image_url: null,
+        product_image: null,
+        debit_note: null,
+        error: message,
+      };
     }
   } else {
     invoice_image_url = emptyToNull(formData.get("invoice_image_url"));
   }
 
-  let invoice_pdf_url: string | null;
-  if (uploadPdf) {
-    if (!isPdfFile(pdfFile)) {
+  let product_image: string | null;
+  if (uploadProductImage) {
+    if (!isImageFile(productImageFile)) {
       return {
         invoice_image_url,
-        invoice_pdf_url: null,
-        error: "Invoice PDF must be a .pdf file.",
+        product_image: null,
+        debit_note: null,
+        error: "Product image must be an image file (e.g. PNG, JPEG, WebP).",
       };
     }
-    if (pdfFile.size > MAX_INVOICE_FILE_BYTES) {
+    if (productImageFile.size > MAX_UPLOAD_FILE_BYTES) {
       return {
         invoice_image_url,
-        invoice_pdf_url: null,
-        error: "Invoice PDF is too large. Maximum size is 10 MB.",
+        product_image: null,
+        debit_note: null,
+        error: "Product image is too large. Maximum size is 10 MB.",
       };
     }
     const token = await getToken();
     if (!token) {
       return {
         invoice_image_url,
-        invoice_pdf_url: null,
+        product_image: null,
+        debit_note: null,
         error:
           "Sign in with Microsoft to upload invoice files — use Connect Microsoft on the Documents page.",
       };
     }
     try {
-      const buffer = await pdfFile.arrayBuffer();
+      const buffer = await productImageFile.arrayBuffer();
       const uploaded = await uploadToMyOneDrive(token, {
-        fileName: pdfFile.name,
+        fileName: productImageFile.name,
         bytes: buffer,
-        contentType: pdfFile.type || "application/pdf",
+        contentType: productImageFile.type || "application/octet-stream",
       });
       if (!uploaded.webUrl) {
         return {
           invoice_image_url,
-          invoice_pdf_url: null,
-          error: "OneDrive did not return a link for the invoice PDF.",
+          product_image: null,
+          debit_note: null,
+          error: "OneDrive did not return a link for the product image.",
         };
       }
-      invoice_pdf_url = uploaded.webUrl;
+      product_image = uploaded.webUrl;
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Invoice PDF upload failed";
-      return { invoice_image_url, invoice_pdf_url: null, error: message };
+      const message = e instanceof Error ? e.message : "Product image upload failed";
+      return {
+        invoice_image_url,
+        product_image: null,
+        debit_note: null,
+        error: message,
+      };
     }
   } else {
-    invoice_pdf_url = emptyToNull(formData.get("invoice_pdf_url"));
+    product_image = emptyToNull(formData.get("product_image"));
   }
 
-  return { invoice_image_url, invoice_pdf_url, error: null };
+  let debit_note: string | null;
+  if (uploadDebitNote) {
+    if (debitNoteFile.size > MAX_UPLOAD_FILE_BYTES) {
+      return {
+        invoice_image_url,
+        product_image,
+        debit_note: null,
+        error: "Debit note file is too large. Maximum size is 10 MB.",
+      };
+    }
+    const token = await getToken();
+    if (!token) {
+      return {
+        invoice_image_url,
+        product_image,
+        debit_note: null,
+        error:
+          "Sign in with Microsoft to upload invoice files — use Connect Microsoft on the Documents page.",
+      };
+    }
+    try {
+      const buffer = await debitNoteFile.arrayBuffer();
+      const uploaded = await uploadToMyOneDrive(token, {
+        fileName: debitNoteFile.name,
+        bytes: buffer,
+        contentType: debitNoteFile.type || "application/octet-stream",
+      });
+      if (!uploaded.webUrl) {
+        return {
+          invoice_image_url,
+          product_image,
+          debit_note: null,
+          error: "OneDrive did not return a link for the debit note file.",
+        };
+      }
+      debit_note = uploaded.webUrl;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Debit note upload failed";
+      return {
+        invoice_image_url,
+        product_image,
+        debit_note: null,
+        error: message,
+      };
+    }
+  } else {
+    debit_note = canUploadDebitNote ? emptyToNull(formData.get("debit_note")) : null;
+  }
+
+  return { invoice_image_url, product_image, debit_note, error: null };
 }
 
 function mapSupabaseError(message: string) {
@@ -217,12 +286,11 @@ type ParsedInventoryUpdate = {
   invoice_amount: number | null;
   invoice_date: string | null;
   invoice_image_url: string | null;
-  invoice_pdf_url: string | null;
+  product_image: string | null;
   payment_details: string | null;
   payment_mode: string | null;
   payment_status: string | null;
   debit_note: string | null;
-  comments: string | null;
 };
 
 function mergeInventoryForRestrictedUser(
@@ -278,18 +346,11 @@ function mergeInventoryForRestrictedUser(
       : existing.received_quantity != null
         ? String(existing.received_quantity)
         : null,
-    tallying: invStrEmpty(existing.tallying)
-      ? incoming.tallying
-      : (existing.tallying as string | null),
-    pricing: invStrEmpty(existing.pricing)
-      ? incoming.pricing
-      : (existing.pricing as string | null),
-    stickering: invStrEmpty(existing.stickering)
-      ? incoming.stickering
-      : (existing.stickering as string | null),
-    supply: invStrEmpty(existing.supply)
-      ? incoming.supply
-      : (existing.supply as string | null),
+    // Allow restricted users to always update these workflow status fields.
+    tallying: incoming.tallying,
+    pricing: incoming.pricing,
+    stickering: incoming.stickering,
+    supply: incoming.supply,
     invoice_amount: invNumEmpty(existing.invoice_amount)
       ? incoming.invoice_amount
       : (existing.invoice_amount as number | null),
@@ -299,9 +360,9 @@ function mergeInventoryForRestrictedUser(
     invoice_image_url: invStrEmpty(existing.invoice_image_url)
       ? incoming.invoice_image_url
       : (existing.invoice_image_url as string | null),
-    invoice_pdf_url: invStrEmpty(existing.invoice_pdf_url)
-      ? incoming.invoice_pdf_url
-      : (existing.invoice_pdf_url as string | null),
+    product_image: invStrEmpty(existing.product_image)
+      ? incoming.product_image
+      : (existing.product_image as string | null),
     payment_details: invStrEmpty(existing.payment_details)
       ? incoming.payment_details
       : (existing.payment_details as string | null),
@@ -314,9 +375,6 @@ function mergeInventoryForRestrictedUser(
     debit_note: invStrEmpty(existing.debit_note)
       ? incoming.debit_note
       : (existing.debit_note as string | null),
-    comments: invStrEmpty(existing.comments)
-      ? incoming.comments
-      : (existing.comments as string | null),
   };
 }
 
@@ -367,7 +425,6 @@ export async function createInventory(
 
   const staff_name = emptyToNull(formData.get("staff_name"));
   if (!inventory_number) return { error: "Inventory number is required." };
-  if (!staff_name) return { error: "Staff is required." };
   const location = emptyToNull(formData.get("location"));
   const invoice_number = emptyToNull(formData.get("invoice_number"));
 
@@ -396,15 +453,14 @@ export async function createInventory(
   if (invoiceAmountErr) return { error: invoiceAmountErr };
 
   const invoice_date = emptyToNull(formData.get("invoice_date"));
-  const invoiceUrlsCreate = await resolveInvoiceUrlsFromForm(formData);
+  const invoiceUrlsCreate = await resolveDocumentUrlsFromForm(formData, isAdmin);
   if (invoiceUrlsCreate.error) return { error: invoiceUrlsCreate.error };
   const invoice_image_url = invoiceUrlsCreate.invoice_image_url;
-  const invoice_pdf_url = invoiceUrlsCreate.invoice_pdf_url;
+  const product_image = invoiceUrlsCreate.product_image;
+  const debit_note = invoiceUrlsCreate.debit_note;
   const payment_details = isAdmin ? emptyToNull(formData.get("payment_details")) : null;
   const payment_mode = isAdmin ? emptyToNull(formData.get("payment_mode")) : null;
   const payment_status = isAdmin ? emptyToNull(formData.get("payment_status")) : null;
-  const debit_note = isAdmin ? emptyToNull(formData.get("debit_note")) : null;
-  const comments = emptyToNull(formData.get("comments"));
 
   const uniqErr = await assertInventoryNumberUnique(inventory_number, null);
   if (uniqErr.error) return uniqErr;
@@ -432,12 +488,11 @@ export async function createInventory(
     invoice_amount,
     invoice_date,
     invoice_image_url,
-    invoice_pdf_url,
+    product_image,
     payment_details,
     payment_mode,
     payment_status,
     debit_note,
-    comments,
   });
 
   if (error) return { error: mapSupabaseError(error.message) };
@@ -477,7 +532,6 @@ export async function updateInventory(
   if (loadingChargesErr) return { error: loadingChargesErr };
 
   const staff_name = emptyToNull(formData.get("staff_name"));
-  if (!staff_name) return { error: "Staff is required." };
   const location = emptyToNull(formData.get("location"));
   const invoice_number = emptyToNull(formData.get("invoice_number"));
 
@@ -506,14 +560,12 @@ export async function updateInventory(
   if (invoiceAmountErr) return { error: invoiceAmountErr };
 
   const invoice_date = emptyToNull(formData.get("invoice_date"));
-  const invoiceUrls = await resolveInvoiceUrlsFromForm(formData);
+  const invoiceUrls = await resolveDocumentUrlsFromForm(formData, isAdmin);
   if (invoiceUrls.error) return { error: invoiceUrls.error };
-  const { invoice_image_url, invoice_pdf_url } = invoiceUrls;
+  const { invoice_image_url, product_image, debit_note } = invoiceUrls;
   const payment_details = isAdmin ? emptyToNull(formData.get("payment_details")) : null;
   const payment_mode = isAdmin ? emptyToNull(formData.get("payment_mode")) : null;
   const payment_status = isAdmin ? emptyToNull(formData.get("payment_status")) : null;
-  const debit_note = isAdmin ? emptyToNull(formData.get("debit_note")) : null;
-  const comments = emptyToNull(formData.get("comments"));
 
   const parsed: ParsedInventoryUpdate = {
     inventory_number,
@@ -537,12 +589,11 @@ export async function updateInventory(
     invoice_amount,
     invoice_date,
     invoice_image_url,
-    invoice_pdf_url,
+    product_image,
     payment_details,
     payment_mode,
     payment_status,
     debit_note,
-    comments,
   };
 
   const supabase = createSupabase();

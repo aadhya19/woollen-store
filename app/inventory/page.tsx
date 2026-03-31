@@ -17,7 +17,7 @@ export default async function InventoryPage() {
   const inventoriesQuery = supabase
     .from("Inventory")
     .select(
-      "id, inventory_number, company_name, agent_name, transport_name, waybill_number, transport_charges, date_of_entry, loading_charges, staff_name, location, invoice_number, number_of_parcels, billed_quantity, received_quantity, tallying, pricing, stickering, supply, created_at, updated_at, invoice_amount, invoice_date, invoice_image_url, invoice_pdf_url, payment_details, payment_mode, payment_status, debit_note, comments",
+      "id, inventory_number, company_name, agent_name, transport_name, waybill_number, transport_charges, date_of_entry, loading_charges, staff_name, location, invoice_number, number_of_parcels, billed_quantity, received_quantity, tallying, pricing, stickering, supply, created_at, updated_at, invoice_amount, invoice_date, invoice_image_url, product_image, payment_details, payment_mode, payment_status, debit_note",
     )
     .order("created_at", { ascending: false });
 
