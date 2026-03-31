@@ -14,19 +14,19 @@ const navByRole: Record<UserRole, Array<{ href: string; label: string }>> = {
     { href: "/", label: "Dashboard" },
     { href: "/users", label: "Users" },
     { href: "/agents", label: "Agents" },
-    { href: "/inventory", label: "Inventory" },
+    { href: "/inventory", label: "Invoices" },
     { href: "/brands", label: "Brands" },
     { href: "/products", label: "Products" },
     { href: "/style", label: "Style" },
     { href: "/fabric", label: "Fabric" },
-    { href: "/stock", label: "Stock" },
+    { href: "/stock", label: "Inventory" },
     { href: "/transports", label: "Transports" },
     { href: "/documents", label: "Documents" },
   ],
   user: [
     { href: "/", label: "Dashboard" },
-    { href: "/inventory", label: "Inventory" },
-    { href: "/stock", label: "Stock" },
+    { href: "/inventory", label: "Invoices" },
+    { href: "/stock", label: "Inventory" },
   ],
 };
 

@@ -35,7 +35,7 @@ export default async function TopNav() {
                 Agents
               </Link>
               <Link href="/inventory" className={navClass}>
-                Inventory
+                Invoices
               </Link>
               <Link href="/brands" className={navClass}>
                 Brands
@@ -50,7 +50,7 @@ export default async function TopNav() {
                 Fabric
               </Link>
               <Link href="/stock" className={navClass}>
-                Stock
+                Inventory
               </Link>
               <Link href="/transports" className={navClass}>
                 Transports
@@ -60,10 +60,10 @@ export default async function TopNav() {
           {isUser ? (
             <>
               <Link href="/inventory" className={navClass}>
-                Inventory
+                Invoices
               </Link>
               <Link href="/stock" className={navClass}>
-                Stock
+                Inventory
               </Link>
             </>
           ) : null}
