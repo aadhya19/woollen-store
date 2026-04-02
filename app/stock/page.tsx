@@ -125,7 +125,7 @@ export default async function StockPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Stock" description="" />
+      <PageHeader title="Inventory" description="" />
 
       {errorMessage ? (
         <div

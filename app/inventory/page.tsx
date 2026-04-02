@@ -45,7 +45,7 @@ export default async function InventoryPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
-      <PageHeader title="Inventory" description="" />
+      <PageHeader title="Invoices" description="" />
 
       {error ? (
         <div

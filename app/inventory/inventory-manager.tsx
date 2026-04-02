@@ -177,6 +177,13 @@ export function InventoryManager({
       setPendingCreateFormData(null);
       setCreateConfirmSummary(null);
       (document.getElementById("create-inventory-form") as HTMLFormElement)?.reset();
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not create inventory right now. Please try again.";
+      setFormError(message);
+      setCreateConfirmOpen(false);
     } finally {
       setCreateConfirmSubmitting(false);
     }
@@ -1148,13 +1155,7 @@ function InventoryFormFields({
       <p className="max-w-2xl text-xs text-[#245236]/70">
         Invoice files upload to your OneDrive (
         <code className="text-[11px]">ONEDRIVE_UPLOAD_FOLDER</code>).{" "}
-        <a
-          href="/api/auth/microsoft"
-          className="font-medium text-[#245236] underline-offset-2 hover:underline"
-        >
-          Connect Microsoft
-        </a>{" "}
-        if uploads fail. Stored values are OneDrive links.
+        Contact admin if uploads fail. Stored values are OneDrive links.
       </p>
 
       <label className={fieldLabelClass}>

@@ -50,7 +50,6 @@ type DocumentUrlsResult = {
 
 async function resolveDocumentUrlsFromForm(
   formData: FormData,
-  canUploadDebitNote: boolean,
 ): Promise<DocumentUrlsResult> {
   const cookieStore = await cookies();
   const imageFile = formData.get("invoice_image_file");
@@ -60,9 +59,7 @@ async function resolveDocumentUrlsFromForm(
   const uploadProductImage =
     productImageFile instanceof File && productImageFile.size > 0;
   const uploadDebitNote =
-    canUploadDebitNote &&
-    debitNoteFile instanceof File &&
-    debitNoteFile.size > 0;
+    debitNoteFile instanceof File && debitNoteFile.size > 0;
 
   let accessToken: string | null | undefined;
   async function getToken(): Promise<string | null> {
@@ -95,8 +92,7 @@ async function resolveDocumentUrlsFromForm(
         invoice_image_url: null,
         product_image: null,
         debit_note: null,
-        error:
-          "Sign in with Microsoft to upload invoice files — use Connect Microsoft on the Documents page.",
+        error: "Contact admin and ask him to connect microsoft to upload invoice files.",
       };
     }
     try {
@@ -152,8 +148,7 @@ async function resolveDocumentUrlsFromForm(
         invoice_image_url,
         product_image: null,
         debit_note: null,
-        error:
-          "Sign in with Microsoft to upload invoice files — use Connect Microsoft on the Documents page.",
+        error: "Contact admin and ask him to connect microsoft to upload invoice files.",
       };
     }
     try {
@@ -201,8 +196,7 @@ async function resolveDocumentUrlsFromForm(
         invoice_image_url,
         product_image,
         debit_note: null,
-        error:
-          "Sign in with Microsoft to upload invoice files — use Connect Microsoft on the Documents page.",
+        error: "Contact admin and ask him to connect microsoft to upload invoice files.",
       };
     }
     try {
@@ -231,7 +225,7 @@ async function resolveDocumentUrlsFromForm(
       };
     }
   } else {
-    debit_note = canUploadDebitNote ? emptyToNull(formData.get("debit_note")) : null;
+    debit_note = emptyToNull(formData.get("debit_note"));
   }
 
   return { invoice_image_url, product_image, debit_note, error: null };
@@ -453,7 +447,7 @@ export async function createInventory(
   if (invoiceAmountErr) return { error: invoiceAmountErr };
 
   const invoice_date = emptyToNull(formData.get("invoice_date"));
-  const invoiceUrlsCreate = await resolveDocumentUrlsFromForm(formData, isAdmin);
+  const invoiceUrlsCreate = await resolveDocumentUrlsFromForm(formData);
   if (invoiceUrlsCreate.error) return { error: invoiceUrlsCreate.error };
   const invoice_image_url = invoiceUrlsCreate.invoice_image_url;
   const product_image = invoiceUrlsCreate.product_image;
@@ -560,7 +554,7 @@ export async function updateInventory(
   if (invoiceAmountErr) return { error: invoiceAmountErr };
 
   const invoice_date = emptyToNull(formData.get("invoice_date"));
-  const invoiceUrls = await resolveDocumentUrlsFromForm(formData, isAdmin);
+  const invoiceUrls = await resolveDocumentUrlsFromForm(formData);
   if (invoiceUrls.error) return { error: invoiceUrls.error };
   const { invoice_image_url, product_image, debit_note } = invoiceUrls;
   const payment_details = isAdmin ? emptyToNull(formData.get("payment_details")) : null;
