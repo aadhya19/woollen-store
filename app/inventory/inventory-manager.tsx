@@ -2,8 +2,8 @@
 
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { createInventory, updateInventory } from "./actions";
+import { useState, useTransition } from "react";
+import { createInventory, deleteInventory, updateInventory } from "./actions";
 import Modal from "@/app/components/Modal";
 import type {
   AgentLookupRow,
@@ -59,25 +59,25 @@ function buildCreateInventorySummary(
     { label: "Company name", value: fdCell(fd.get("company_name")) },
     { label: "Agent", value: agentId ? lookups.agentLabel(agentId) : "—" },
     { label: "Transport", value: transportId ? lookups.transportLabel(transportId) : "—" },
-    { label: "Waybill number", value: fdCell(fd.get("waybill_number")) },
-    { label: "Transport charges", value: fdCell(fd.get("transport_charges")) },
     { label: "Date of entry", value: fdCell(fd.get("date_of_entry")) },
+    { label: "Waybill number", value: fdCell(fd.get("waybill_number")) },
+    { label: "Number of parcels", value: fdCell(fd.get("number_of_parcels")) },
+    { label: "Transport charges", value: fdCell(fd.get("transport_charges")) },
     { label: "Loading charges", value: fdCell(fd.get("loading_charges")) },
     { label: "Staff", value: staffId ? lookups.userLabel(staffId) : "—" },
     { label: "Location", value: fdCell(fd.get("location")) },
     { label: "Invoice number", value: fdCell(fd.get("invoice_number")) },
-    { label: "Number of parcels", value: fdCell(fd.get("number_of_parcels")) },
+    { label: "Invoice date", value: fdCell(fd.get("invoice_date")) },
+    { label: "Invoice value", value: fdCell(fd.get("invoice_amount")) },
     { label: "Billed quantity", value: fdCell(fd.get("billed_quantity")) },
     { label: "Received quantity", value: fdCell(fd.get("received_quantity")) },
     { label: "Tallying", value: fdCell(fd.get("tallying")) },
     { label: "Pricing", value: fdCell(fd.get("pricing")) },
     { label: "Stickering", value: fdCell(fd.get("stickering")) },
     { label: "Supply", value: fdCell(fd.get("supply")) },
-    { label: "Invoice amount", value: fdCell(fd.get("invoice_amount")) },
-    { label: "Invoice date", value: fdCell(fd.get("invoice_date")) },
-    { label: "Invoice image (file)", value: fdCell(fd.get("invoice_image_file")) },
-    { label: "Product image (file)", value: fdCell(fd.get("product_image_file")) },
-    { label: "Debit note (file)", value: fdCell(fd.get("debit_note_file")) },
+    { label: "Invoice image/pdf (file)", value: fdCell(fd.get("invoice_image_file")) },
+    { label: "Product images (file)", value: fdCell(fd.get("product_image_file")) },
+    { label: "Debit note image (file)", value: fdCell(fd.get("debit_note_file")) },
   ];
   if (!includePaymentFields) return base;
   return [
@@ -113,6 +113,10 @@ export function InventoryManager({
     { label: string; value: string }[] | null
   >(null);
   const [createConfirmSubmitting, setCreateConfirmSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [, startDelete] = useTransition();
+  const [deleteConfirmRow, setDeleteConfirmRow] = useState<InventoryRow | null>(null);
+  const [deleteFeedbackMessage, setDeleteFeedbackMessage] = useState<string | null>(null);
 
   const editingRow = editingId
     ? (inventories.find((r) => r.id === editingId) ?? null)
@@ -198,6 +202,30 @@ export function InventoryManager({
     }
     setEditingId(null);
     router.refresh();
+  }
+
+  function runDelete(row: InventoryRow) {
+    if (!canManage) return;
+    setDeleteConfirmRow(row);
+  }
+
+  function confirmDeleteRow() {
+    if (!deleteConfirmRow) return;
+    const row = deleteConfirmRow;
+    setDeleteConfirmRow(null);
+    setRowError(null);
+    setDeletingId(row.id);
+    startDelete(async () => {
+      const r = await deleteInventory(row.id);
+      if (r.error) {
+        setDeleteFeedbackMessage(r.error);
+        setDeletingId(null);
+        return;
+      }
+      if (editingId === row.id) setEditingId(null);
+      setDeletingId(null);
+      router.refresh();
+    });
   }
 
   const listSearchLower = listSearch.trim().toLowerCase();
@@ -479,6 +507,73 @@ export function InventoryManager({
         ) : null}
       </Modal>
 
+      <Modal
+        open={Boolean(deleteConfirmRow)}
+        onClose={() => {
+          if (deletingId) return;
+          setDeleteConfirmRow(null);
+        }}
+        title="Delete invoice"
+        description="Please confirm before deleting this invoice row."
+        panelClassName="max-w-lg"
+      >
+        {deleteConfirmRow ? (
+          <div className="space-y-4">
+            <p className="text-sm text-[#245236]">
+              Delete invoice{" "}
+              <span className="font-semibold tabular-nums">
+                {deleteConfirmRow.inventory_number?.trim() || "—"}
+              </span>
+              ?
+            </p>
+            <p className="text-xs text-[#245236]/75">
+              If linked inventory entries exist, deletion will be blocked and you must delete those
+              rows first in the Inventory tab.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={Boolean(deletingId)}
+                onClick={() => setDeleteConfirmRow(null)}
+                className="inline-flex h-[38px] items-center justify-center rounded-lg border border-[#245236]/30 bg-[#FEED01]/30 px-4 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/50 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={Boolean(deletingId)}
+                onClick={confirmDeleteRow}
+                className="inline-flex h-[38px] items-center justify-center rounded-lg bg-red-700 px-4 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-60"
+              >
+                {deletingId ? "Deleting..." : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={Boolean(deleteFeedbackMessage)}
+        onClose={() => setDeleteFeedbackMessage(null)}
+        title="Delete blocked"
+        panelClassName="max-w-lg"
+      >
+        <div className="space-y-4">
+          <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {deleteFeedbackMessage}
+          </p>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setDeleteFeedbackMessage(null)}
+              className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      </Modal>
+
       {rowError && !isEditModalOpen ? (
         <p
           role="alert"
@@ -625,18 +720,30 @@ export function InventoryManager({
 
                   <div className="flex justify-end gap-2 pt-1">
                     {canManage || allowRestrictedEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFormError(null);
-                          closeCreateModal();
-                          setRowError(null);
-                          setEditingId(row.id);
-                        }}
-                        className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
-                      >
-                        Edit
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormError(null);
+                            closeCreateModal();
+                            setRowError(null);
+                            setEditingId(row.id);
+                          }}
+                          className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                        >
+                          Edit
+                        </button>
+                        {canManage ? (
+                          <button
+                            type="button"
+                            onClick={() => runDelete(row)}
+                            disabled={deletingId === row.id}
+                            className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
+                          >
+                            {deletingId === row.id ? "Deleting..." : "Delete"}
+                          </button>
+                        ) : null}
+                      </>
                     ) : (
                       <span className="text-xs text-[#245236]/70">View only</span>
                     )}
@@ -778,18 +885,30 @@ export function InventoryManager({
                         </td>
                         <td className="px-4 py-3 text-right">
                           {canManage || allowRestrictedEdit ? (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setFormError(null);
-                                closeCreateModal();
-                                setRowError(null);
-                                setEditingId(row.id);
-                              }}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
-                            >
-                              Edit
-                            </button>
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormError(null);
+                                  closeCreateModal();
+                                  setRowError(null);
+                                  setEditingId(row.id);
+                                }}
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                              >
+                                Edit
+                              </button>
+                              {canManage ? (
+                                <button
+                                  type="button"
+                                  onClick={() => runDelete(row)}
+                                  disabled={deletingId === row.id}
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
+                                >
+                                  {deletingId === row.id ? "Deleting..." : "Delete"}
+                                </button>
+                              ) : null}
+                            </div>
                           ) : (
                             <span className="text-xs text-[#245236]/70">
                               View only
@@ -920,6 +1039,17 @@ function InventoryFormFields({
       />
 
       <label className={fieldLabelClass}>
+        Date of entry
+        <input
+          name="date_of_entry"
+          type="date"
+          defaultValue={v?.date_of_entry ?? ""}
+          readOnly={ro && invHasStr(v?.date_of_entry)}
+          className={`${ro && invHasStr(v?.date_of_entry) ? fieldReadOnlyClass : fieldInputClass}`}
+        />
+      </label>
+
+      <label className={fieldLabelClass}>
         Waybill number
         <input
           name="waybill_number"
@@ -933,6 +1063,25 @@ function InventoryFormFields({
       </label>
 
       <label className={fieldLabelClass}>
+        Number of parcels
+        <select
+          name="number_of_parcels"
+          defaultValue={v?.number_of_parcels != null ? String(v.number_of_parcels) : ""}
+          disabled={ro && invHasQty(v?.number_of_parcels)}
+          className={
+            ro && invHasQty(v?.number_of_parcels) ? fieldReadOnlyClass : fieldInputClass
+          }
+        >
+          <option value="">—</option>
+          {Array.from({ length: 30 }).map((_, i) => (
+            <option key={i + 1} value={i + 1}>
+              {i + 1}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className={fieldLabelClass}>
         Transport charges
         <input
           name="transport_charges"
@@ -943,17 +1092,6 @@ function InventoryFormFields({
           }
           readOnly={ro && invHasNum(v?.transport_charges)}
           className={ro && invHasNum(v?.transport_charges) ? fieldReadOnlyClass : fieldInputClass}
-        />
-      </label>
-
-      <label className={fieldLabelClass}>
-        Date of entry
-        <input
-          name="date_of_entry"
-          type="date"
-          defaultValue={v?.date_of_entry ?? ""}
-          readOnly={ro && invHasStr(v?.date_of_entry)}
-          className={`${ro && invHasStr(v?.date_of_entry) ? fieldReadOnlyClass : fieldInputClass}`}
         />
       </label>
 
@@ -1017,22 +1155,28 @@ function InventoryFormFields({
       </label>
 
       <label className={fieldLabelClass}>
-        Number of parcels
-        <select
-          name="number_of_parcels"
-          defaultValue={v?.number_of_parcels != null ? String(v.number_of_parcels) : ""}
-          disabled={ro && invHasQty(v?.number_of_parcels)}
-          className={
-            ro && invHasQty(v?.number_of_parcels) ? fieldReadOnlyClass : fieldInputClass
+        Invoice date
+        <input
+          name="invoice_date"
+          type="date"
+          defaultValue={v?.invoice_date ?? ""}
+          readOnly={ro && invHasStr(v?.invoice_date)}
+          className={`${ro && invHasStr(v?.invoice_date) ? fieldReadOnlyClass : fieldInputClass}`}
+        />
+      </label>
+
+      <label className={fieldLabelClass}>
+        Invoice value
+        <input
+          name="invoice_amount"
+          type="number"
+          step="any"
+          defaultValue={
+            v?.invoice_amount != null ? String(v.invoice_amount) : ""
           }
-        >
-          <option value="">—</option>
-          {Array.from({ length: 30 }).map((_, i) => (
-            <option key={i + 1} value={i + 1}>
-              {i + 1}
-            </option>
-          ))}
-        </select>
+          readOnly={ro && invHasNum(v?.invoice_amount)}
+          className={ro && invHasNum(v?.invoice_amount) ? fieldReadOnlyClass : fieldInputClass}
+        />
       </label>
 
       <label className={fieldLabelClass}>
@@ -1119,31 +1263,6 @@ function InventoryFormFields({
         </select>
       </label>
 
-      <label className={fieldLabelClass}>
-        Invoice amount
-        <input
-          name="invoice_amount"
-          type="number"
-          step="any"
-          defaultValue={
-            v?.invoice_amount != null ? String(v.invoice_amount) : ""
-          }
-          readOnly={ro && invHasNum(v?.invoice_amount)}
-          className={ro && invHasNum(v?.invoice_amount) ? fieldReadOnlyClass : fieldInputClass}
-        />
-      </label>
-
-      <label className={fieldLabelClass}>
-        Invoice date
-        <input
-          name="invoice_date"
-          type="date"
-          defaultValue={v?.invoice_date ?? ""}
-          readOnly={ro && invHasStr(v?.invoice_date)}
-          className={`${ro && invHasStr(v?.invoice_date) ? fieldReadOnlyClass : fieldInputClass}`}
-        />
-      </label>
-
       <input
         type="hidden"
         name="invoice_image_url"
@@ -1159,7 +1278,7 @@ function InventoryFormFields({
       </p>
 
       <label className={fieldLabelClass}>
-        Invoice image
+        Invoice Image/pdf
         {v?.invoice_image_url ? (
           <span className="font-normal text-[#245236]/70">
             Current:{" "}
@@ -1180,14 +1299,14 @@ function InventoryFormFields({
           <input
             name="invoice_image_file"
             type="file"
-            accept="image/*"
+            accept="image/*,application/pdf"
             className={fileInputClass}
           />
         ) : null}
       </label>
 
       <label className={fieldLabelClass}>
-        Product image
+        Product Images
         {v?.product_image ? (
           <span className="font-normal text-[#245236]/70">
             Current:{" "}
@@ -1276,7 +1395,7 @@ function InventoryFormFields({
       ) : null}
 
       <label className={fieldLabelClass}>
-        Debit note
+        Debit Note Image
         {v?.debit_note ? (
           <span className="font-normal text-[#245236]/70">
             Current:{" "}
@@ -1297,6 +1416,7 @@ function InventoryFormFields({
           <input
             name="debit_note_file"
             type="file"
+            accept="image/*"
             className={fileInputClass}
           />
         ) : null}

@@ -52,6 +52,9 @@ function mapSupabaseError(message: string) {
   if (m.includes("stock_fabric_fkey")) {
     return `${message} Fabric must reference an existing row in Fabric.`;
   }
+  if (m.includes("stock_size_fkey")) {
+    return `${message} size must reference an existing row in Sizes.`;
+  }
   if (
     (m.includes("duplicate key") || m.includes("unique constraint")) &&
     m.includes("stock")

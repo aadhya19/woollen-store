@@ -49,6 +49,9 @@ export default async function TopNav() {
               <Link href="/fabric" className={navClass}>
                 Fabric
               </Link>
+              <Link href="/sizes" className={navClass}>
+                Sizes
+              </Link>
               <Link href="/stock" className={navClass}>
                 Inventory
               </Link>

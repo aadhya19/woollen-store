@@ -41,6 +41,13 @@ function isImageFile(file: File) {
   return /\.(png|jpe?g|webp|gif)$/i.test(file.name);
 }
 
+function isInvoiceDocumentFile(file: File) {
+  const mime = (file.type || "").toLowerCase();
+  if (mime.startsWith("image/")) return true;
+  if (mime === "application/pdf") return true;
+  return /\.(png|jpe?g|webp|gif|pdf)$/i.test(file.name);
+}
+
 type DocumentUrlsResult = {
   invoice_image_url: string | null;
   product_image: string | null;
@@ -70,12 +77,12 @@ async function resolveDocumentUrlsFromForm(
 
   let invoice_image_url: string | null;
   if (uploadImage) {
-    if (!isImageFile(imageFile)) {
+    if (!isInvoiceDocumentFile(imageFile)) {
       return {
         invoice_image_url: null,
         product_image: null,
         debit_note: null,
-        error: "Invoice image must be an image file (e.g. PNG, JPEG, WebP).",
+        error: "Invoice file must be an image or PDF file.",
       };
     }
     if (imageFile.size > MAX_UPLOAD_FILE_BYTES) {
@@ -491,6 +498,46 @@ export async function createInventory(
 
   if (error) return { error: mapSupabaseError(error.message) };
   revalidatePath("/inventory");
+  return { error: null };
+}
+
+export async function deleteInventory(id: string): Promise<ActionResult> {
+  const authError = await requireActionRole(["admin"]);
+  if (authError) return { error: authError };
+  if (!id) return { error: "Missing inventory id" };
+
+  const supabase = createSupabase();
+
+  const { data: inventory, error: inventoryErr } = await supabase
+    .from("Inventory")
+    .select("id, inventory_number")
+    .eq("id", id)
+    .maybeSingle();
+  if (inventoryErr) return { error: mapSupabaseError(inventoryErr.message) };
+  if (!inventory) return { error: "Inventory row not found." };
+
+  const inventoryNumber = String(inventory.inventory_number ?? "").trim();
+  if (!inventoryNumber) {
+    return { error: "Inventory number is missing on this row. Cannot safely delete." };
+  }
+
+  const { count, error: stockCheckErr } = await supabase
+    .from("Stock")
+    .select("id", { count: "exact", head: true })
+    .eq("inventory_number", inventoryNumber);
+  if (stockCheckErr) return { error: mapSupabaseError(stockCheckErr.message) };
+
+  if ((count ?? 0) > 0) {
+    return {
+      error: `Cannot delete invoice ${inventoryNumber} because ${count} inventory row(s) still reference it. Please delete those inventory entries first in the Inventory tab.`,
+    };
+  }
+
+  const { error: deleteErr } = await supabase.from("Inventory").delete().eq("id", id);
+  if (deleteErr) return { error: mapSupabaseError(deleteErr.message) };
+
+  revalidatePath("/inventory");
+  revalidatePath("/stock");
   return { error: null };
 }
 

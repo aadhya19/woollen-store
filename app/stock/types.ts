@@ -39,6 +39,11 @@ export type FabricOption = {
   fabric_name: string | null;
 };
 
+export type SizeOption = {
+  id: string;
+  size: string | null;
+};
+
 /** Inventory row fields shown read-only when adding stock after picking an inventory number. */
 export type InventoryStockContext = {
   inventory_number: string;

@@ -10,6 +10,7 @@ import type {
   FabricOption,
   InventoryStockContext,
   ProductOption,
+  SizeOption,
   StockRow,
   StyleOption,
 } from "./types";
@@ -20,6 +21,7 @@ type Props = {
   brands: BrandOption[];
   styles: StyleOption[];
   fabrics: FabricOption[];
+  sizes: SizeOption[];
   inventoryForStock: InventoryStockContext[];
   canManage: boolean;
   allowRestrictedEdit?: boolean;
@@ -39,6 +41,7 @@ function buildCreateStockSummary(
   products: ProductOption[],
   styles: StyleOption[],
   fabrics: FabricOption[],
+  sizes: SizeOption[],
 ): { label: string; value: string }[] {
   const brandId = fd.get("brand_name")?.toString().trim() ?? "";
   const productId = fd.get("product")?.toString().trim() ?? "";
@@ -53,6 +56,8 @@ function buildCreateStockSummary(
     styles.find((s) => s.id === styleId)?.style_name?.trim() || styleId || "—";
   const fabricName =
     fabrics.find((f) => f.id === fabricId)?.fabric_name?.trim() || fabricId || "—";
+  const sizeId = fd.get("size")?.toString().trim() ?? "";
+  const sizeLabel = sizes.find((s) => s.id === sizeId)?.size?.trim() || sizeId || "—";
 
   const emptyToDash = (v: FormDataEntryValue | null) => {
     const s = v?.toString().trim();
@@ -66,7 +71,7 @@ function buildCreateStockSummary(
     { label: "Fabric", value: fabricName },
     { label: "Stock number", value: emptyToDash(fd.get("stock_number")) },
     { label: "Inventory number", value: emptyToDash(fd.get("inventory_number")) },
-    { label: "Size", value: emptyToDash(fd.get("size")) },
+    { label: "Size", value: sizeLabel },
     { label: "Pieces", value: emptyToDash(fd.get("pieces")) },
     { label: "HSN code", value: emptyToDash(fd.get("HSN_code")) },
     { label: "GST group", value: emptyToDash(fd.get("GST_group")) },
@@ -82,6 +87,7 @@ export function StockManager({
   brands,
   styles,
   fabrics,
+  sizes,
   inventoryForStock,
   canManage,
   allowRestrictedEdit = false,
@@ -92,6 +98,7 @@ export function StockManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [inventorySearch, setInventorySearch] = useState("");
+  const [entrySearch, setEntrySearch] = useState("");
   const [searchedInventoryNumber, setSearchedInventoryNumber] = useState("");
   const [activeInventoryNumber, setActiveInventoryNumber] = useState<string | null>(null);
   const [, startDelete] = useTransition();
@@ -118,6 +125,11 @@ export function StockManager({
     [fabrics],
   );
 
+  const sizeById = useMemo(
+    () => new Map(sizes.map((s) => [s.id, s] as const)),
+    [sizes],
+  );
+
   const brandLabel = (brandId: string | null | undefined) => {
     if (!brandId?.trim()) return "—";
     const b = brands.find((x) => x.id === brandId);
@@ -139,7 +151,7 @@ export function StockManager({
   const matchingInventories = useMemo(() => {
     if (!searchPrefixLower) return [];
     return inventoryForStock
-      .filter((row) => row.inventory_number.trim().toLowerCase().startsWith(searchPrefixLower))
+      .filter((row) => row.inventory_number.trim().toLowerCase().includes(searchPrefixLower))
       .sort((a, b) => a.inventory_number.localeCompare(b.inventory_number));
   }, [inventoryForStock, searchPrefixLower]);
 
@@ -154,16 +166,34 @@ export function StockManager({
 
   const filteredStock = useMemo(() => {
     if (!searchPrefixLower) return [];
-    if (selectedInventory) {
-      const key = selectedInventory.inventory_number.trim().toLowerCase();
-      return stock.filter(
-        (row) => (row.inventory_number?.trim().toLowerCase() ?? "") === key,
-      );
-    }
     return stock.filter((row) =>
-      (row.inventory_number?.trim().toLowerCase() ?? "").startsWith(searchPrefixLower),
+      (row.inventory_number?.trim().toLowerCase() ?? "").includes(searchPrefixLower),
     );
-  }, [stock, searchPrefixLower, selectedInventory]);
+  }, [stock, searchPrefixLower]);
+
+  const entrySearchLower = entrySearch.trim().toLowerCase();
+  const filteredVisibleStock = useMemo(() => {
+    if (!entrySearchLower) return filteredStock;
+    return filteredStock.filter((row) =>
+      stockRowMatchesLikeSearch(row, entrySearchLower, {
+        productName:
+          productById.get(row.product ?? "")?.product_name?.trim() || productRowLabel(row),
+        brandName: brandLabel(row.brand_name),
+        styleName: styleById.get(row.style ?? "")?.style_name?.trim() || "",
+        fabricName: fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "",
+        sizeLabel: sizeById.get(row.size ?? "")?.size?.trim() || row.size || "",
+      }),
+    );
+  }, [
+    filteredStock,
+    entrySearchLower,
+    productById,
+    productRowLabel,
+    brandLabel,
+    styleById,
+    fabricById,
+    sizeById,
+  ]);
 
   const editingRow = useMemo(() => {
     if (!editingId) return null;
@@ -173,7 +203,7 @@ export function StockManager({
   const prefixMatchedStockOnly = useMemo(() => {
     if (!searchPrefixLower) return [];
     return stock.filter((row) =>
-      (row.inventory_number?.trim().toLowerCase() ?? "").startsWith(searchPrefixLower),
+      (row.inventory_number?.trim().toLowerCase() ?? "").includes(searchPrefixLower),
     );
   }, [stock, searchPrefixLower]);
 
@@ -204,7 +234,7 @@ export function StockManager({
     }
     setFormError(null);
     setPendingCreateFormData(cloneFormData(fd));
-    setCreateConfirmSummary(buildCreateStockSummary(fd, brands, products, styles, fabrics));
+    setCreateConfirmSummary(buildCreateStockSummary(fd, brands, products, styles, fabrics, sizes));
     setCreateConfirmOpen(true);
   }
 
@@ -258,7 +288,7 @@ export function StockManager({
   }
 
   function handleExportExcel() {
-    if (filteredStock.length === 0) return;
+    if (filteredVisibleStock.length === 0) return;
 
     const columns = [
       "Stock No",
@@ -274,7 +304,7 @@ export function StockManager({
       "Size",
     ];
 
-    const csvRows = filteredStock.map((row) => {
+    const csvRows = filteredVisibleStock.map((row) => {
       const p = productById.get(row.product ?? "");
       const productName = p?.product_name?.trim() || productRowLabel(row);
       const style = styleById.get(row.style ?? "")?.style_name?.trim() ?? "";
@@ -315,6 +345,7 @@ export function StockManager({
     setFormError(null);
     setRowError(null);
     closeCreateModal();
+    setEntrySearch("");
     const prefix = inventorySearch.trim();
     setSearchedInventoryNumber(prefix);
     if (!prefix) {
@@ -323,7 +354,7 @@ export function StockManager({
     }
     const prefixLower = prefix.toLowerCase();
     const matches = inventoryForStock
-      .filter((row) => row.inventory_number.trim().toLowerCase().startsWith(prefixLower))
+      .filter((row) => row.inventory_number.trim().toLowerCase().includes(prefixLower))
       .sort((a, b) => a.inventory_number.localeCompare(b.inventory_number));
     setActiveInventoryNumber(matches[0]?.inventory_number ?? null);
   }
@@ -358,6 +389,7 @@ export function StockManager({
                 setInventorySearch("");
                 setSearchedInventoryNumber("");
                 setActiveInventoryNumber(null);
+                setEntrySearch("");
                 closeCreateModal();
               }}
               className="inline-flex h-[38px] items-center justify-center rounded-lg border border-[#245236]/30 bg-[#FEED01]/40 px-4 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/60"
@@ -398,6 +430,7 @@ export function StockManager({
                 brands={brands}
                 styles={styles}
                 fabrics={fabrics}
+                sizes={sizes}
                 inventoryChoices={inventoryForStock}
                 lockedInventoryNumber={selectedInventory.inventory_number}
               />
@@ -490,6 +523,7 @@ export function StockManager({
               brands={brands}
               styles={styles}
               fabrics={fabrics}
+              sizes={sizes}
               inventoryChoices={inventoryForStock}
               restrictEditToEmptyFields={allowRestrictedEdit && !canManage}
             />
@@ -586,7 +620,7 @@ export function StockManager({
               <button
                 type="button"
                 onClick={handleExportExcel}
-                disabled={filteredStock.length === 0}
+                disabled={filteredVisibleStock.length === 0}
                 className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Export Excel
@@ -594,17 +628,44 @@ export function StockManager({
             </div>
           </div>
 
+          <section className="rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm">
+            <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
+              Search displayed entries
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="search"
+                  value={entrySearch}
+                  onChange={(e) => setEntrySearch(e.target.value)}
+                  autoComplete="off"
+                  placeholder="Search stock #, product, brand, style, fabric, size, pricing..."
+                  className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                />
+                {entrySearch.trim() ? (
+                  <button
+                    type="button"
+                    onClick={() => setEntrySearch("")}
+                    className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+                  >
+                    Clear
+                  </button>
+                ) : null}
+              </div>
+            </label>
+          </section>
+
           <div className="overflow-hidden rounded-xl border border-[#245236]/20 bg-white shadow-sm">
-            {filteredStock.length === 0 ? (
+            {filteredVisibleStock.length === 0 ? (
               <p className="p-8 text-center text-sm text-zinc-500">
-                {selectedInventory
-                  ? `No stock rows for inventory ${selectedInventory.inventory_number} yet.`
-                  : "No stock rows start with this prefix yet."}
+                {entrySearch.trim()
+                  ? `No rows match "${entrySearch.trim()}". Try a shorter or different term.`
+                  : selectedInventory
+                    ? `No stock rows for inventory ${selectedInventory.inventory_number} yet.`
+                    : "No stock rows start with this prefix yet."}
               </p>
             ) : (
               <>
                 <div className="divide-y divide-[#245236]/15 md:hidden">
-                  {filteredStock.map((row) => (
+                  {filteredVisibleStock.map((row) => (
                     <article key={row.id} className="space-y-3 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -713,7 +774,7 @@ export function StockManager({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#245236]/15">
-                    {filteredStock.map((row) => (
+                    {filteredVisibleStock.map((row) => (
                       <tr
                         key={row.id}
                         className="hover:bg-[#FEED01]/20"
@@ -845,17 +906,6 @@ function stkHasNum(n: number | null | undefined) {
   return n != null;
 }
 
-const STOCK_SIZE_OPTIONS = [
-  "XXS",
-  "XS",
-  "S",
-  "M",
-  "L",
-  "XL",
-  "XXL",
-  "XXXL",
-] as const;
-
 function inventoryDisplayLabel(
   num: string | null | undefined,
   choices: InventoryStockContext[],
@@ -876,6 +926,7 @@ function StockFormFields({
   brands,
   styles,
   fabrics,
+  sizes,
   inventoryChoices,
   lockedInventoryNumber,
   restrictEditToEmptyFields = false,
@@ -886,6 +937,7 @@ function StockFormFields({
   brands: BrandOption[];
   styles: StyleOption[];
   fabrics: FabricOption[];
+  sizes: SizeOption[];
   inventoryChoices: InventoryStockContext[];
   lockedInventoryNumber?: string | null;
   restrictEditToEmptyFields?: boolean;
@@ -942,10 +994,9 @@ function StockFormFields({
     : "—";
 
   const sizeRawTrimmed = v?.size?.trim() ?? "";
-  const sizeUpper = sizeRawTrimmed ? sizeRawTrimmed.toUpperCase() : "";
-  const sizeInCatalog =
-    Boolean(sizeUpper) && (STOCK_SIZE_OPTIONS as readonly string[]).includes(sizeUpper);
-  const sizeSelectDefault = !sizeRawTrimmed ? "" : sizeInCatalog ? sizeUpper : sizeRawTrimmed;
+  const sizeCurrentLabel = sizeRawTrimmed
+    ? sizes.find((s) => s.id === sizeRawTrimmed)?.size?.trim() || sizeRawTrimmed
+    : "—";
 
   return (
     <div className="flex w-full flex-col gap-4">
@@ -1099,18 +1150,18 @@ function StockFormFields({
           {ro && stkHasStr(v?.size) ? (
             <>
               <input type="hidden" name="size" value={v?.size ?? ""} />
-              <div className={readOnlySelectClass}>{v?.size ?? "—"}</div>
+              <div className={readOnlySelectClass}>{sizeCurrentLabel}</div>
             </>
           ) : (
-            <select name="size" className={selectClass} defaultValue={sizeSelectDefault}>
-              <option value="">—</option>
-              {STOCK_SIZE_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+            <select name="size" className={selectClass} defaultValue={sizeRawTrimmed}>
+              <option value="">Select size</option>
+              {sizes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.size?.trim() || s.id}
                 </option>
               ))}
-              {sizeRawTrimmed && !sizeInCatalog ? (
-                <option value={sizeRawTrimmed}>{sizeRawTrimmed} (custom)</option>
+              {sizeRawTrimmed && !sizes.some((s) => s.id === sizeRawTrimmed) ? (
+                <option value={sizeRawTrimmed}>{sizeCurrentLabel} (not in list)</option>
               ) : null}
             </select>
           )}
@@ -1275,4 +1326,41 @@ function formatMoney(value: number | null) {
 function toCsvCell(value: string | number | null | undefined) {
   const text = value == null ? "" : String(value);
   return `"${text.replaceAll('"', '""')}"`;
+}
+
+function stockRowMatchesLikeSearch(
+  row: StockRow,
+  needleLower: string,
+  labels: {
+    productName: string;
+    brandName: string;
+    styleName: string;
+    fabricName: string;
+      sizeLabel?: string;
+  },
+) {
+  if (!needleLower) return true;
+  const haystacks = [
+    row.stock_number,
+    row.inventory_number,
+    labels.productName,
+    labels.brandName,
+    labels.styleName,
+    labels.fabricName,
+    labels.sizeLabel,
+    row.HSN_code,
+    row.GST_group,
+    row.size,
+    row.pieces,
+    row.cost_price,
+    row.selling_price,
+    row.mrp,
+    row.created_at,
+    row.updated_at,
+  ];
+  return haystacks.some((h) =>
+    String(h ?? "")
+      .toLowerCase()
+      .includes(needleLower),
+  );
 }

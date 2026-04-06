@@ -8,6 +8,7 @@ import type {
   FabricOption,
   InventoryStockContext,
   ProductOption,
+  SizeOption,
   StockRow,
   StyleOption,
 } from "./types";
@@ -40,6 +41,7 @@ export default async function StockPage() {
     { data: brandsRaw, error: brandsError },
     { data: stylesRaw, error: stylesError },
     { data: fabricsRaw, error: fabricsError },
+    { data: sizesRaw, error: sizesError },
     { data: inventoryLookupData, error: inventoryLookupError },
     { data: agentsData, error: agentsError },
   ] = await Promise.all([
@@ -66,6 +68,10 @@ export default async function StockPage() {
       .select("id, fabric_name")
       .order("fabric_name", { ascending: true, nullsFirst: false }),
     supabase
+      .from("Sizes")
+      .select("id, size")
+      .order("size", { ascending: true, nullsFirst: false }),
+    supabase
       .from("Inventory")
       .select(
         "inventory_number, invoice_number, invoice_date, invoice_amount, company_name, agent_name",
@@ -82,6 +88,7 @@ export default async function StockPage() {
     brandsError?.message ??
     stylesError?.message ??
     fabricsError?.message ??
+    sizesError?.message ??
     inventoryLookupError?.message ??
     agentsError?.message ??
     null;
@@ -104,6 +111,11 @@ export default async function StockPage() {
   const fabricOptions: FabricOption[] = (fabricsRaw ?? []).map((f) => {
     const row = f as { id: string; fabric_name: string | null };
     return { id: row.id, fabric_name: row.fabric_name };
+  });
+
+  const sizeOptions: SizeOption[] = (sizesRaw ?? []).map((s) => {
+    const row = s as { id: string; size: string | null };
+    return { id: row.id, size: row.size };
   });
 
   const byInventoryNumber = new Map<string, InventoryStockContext>();
@@ -142,6 +154,7 @@ export default async function StockPage() {
           brands={brandOptions}
           styles={styleOptions}
           fabrics={fabricOptions}
+          sizes={sizeOptions}
           inventoryForStock={inventoryForStock}
           canManage={session.role === "admin"}
           allowRestrictedEdit={session.role === "user"}
