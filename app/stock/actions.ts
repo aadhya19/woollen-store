@@ -310,3 +310,18 @@ export async function deleteStock(id: string): Promise<ActionResult> {
   revalidatePath("/stock");
   return { error: null };
 }
+
+export async function deleteStockMany(ids: string[]): Promise<ActionResult> {
+  const authError = await requireActionRole(["admin"]);
+  if (authError) return { error: authError };
+
+  const uniqueIds = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));
+  if (uniqueIds.length === 0) return { error: "Select at least one stock row to delete." };
+
+  const supabase = createSupabase();
+  const { error } = await supabase.from("Stock").delete().in("id", uniqueIds);
+
+  if (error) return { error: mapSupabaseError(error.message) };
+  revalidatePath("/stock");
+  return { error: null };
+}

@@ -3,7 +3,7 @@
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { createStock, deleteStock, updateStock } from "./actions";
+import { createStock, deleteStock, deleteStockMany, updateStock } from "./actions";
 import Modal from "@/app/components/Modal";
 import type {
   BrandOption,
@@ -109,6 +109,8 @@ export function StockManager({
   >(null);
   const [createConfirmSubmitting, setCreateConfirmSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingMany, setDeletingMany] = useState(false);
+  const [selectedStockIds, setSelectedStockIds] = useState<string[]>([]);
 
   const productById = useMemo(
     () => new Map(products.map((p) => [p.id, p] as const)),
@@ -195,6 +197,15 @@ export function StockManager({
     sizeById,
   ]);
 
+  const visibleStockIds = useMemo(() => filteredVisibleStock.map((row) => row.id), [filteredVisibleStock]);
+  const visibleStockIdSet = useMemo(() => new Set(visibleStockIds), [visibleStockIds]);
+  const selectedVisibleCount = useMemo(
+    () => selectedStockIds.filter((id) => visibleStockIdSet.has(id)).length,
+    [selectedStockIds, visibleStockIdSet],
+  );
+  const allVisibleSelected =
+    visibleStockIds.length > 0 && selectedVisibleCount === visibleStockIds.length;
+
   const editingRow = useMemo(() => {
     if (!editingId) return null;
     return stock.find((row) => row.id === editingId) ?? null;
@@ -210,6 +221,10 @@ export function StockManager({
   const hasSearchResults =
     searchPrefix.length > 0 &&
     (matchingInventories.length > 0 || prefixMatchedStockOnly.length > 0);
+
+  useEffect(() => {
+    setSelectedStockIds((prev) => prev.filter((id) => visibleStockIdSet.has(id)));
+  }, [visibleStockIdSet]);
 
   function closeCreateModal() {
     setIsCreateOpen(false);
@@ -272,6 +287,7 @@ export function StockManager({
   }
 
   function runDelete(id: string) {
+    if (deletingMany) return;
     setRowError(null);
     setDeletingId(id);
     startDelete(async () => {
@@ -283,6 +299,43 @@ export function StockManager({
       }
       if (editingId === id) setEditingId(null);
       setDeletingId(null);
+      router.refresh();
+    });
+  }
+
+  function toggleSelectStock(id: string) {
+    setSelectedStockIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function toggleSelectAllVisible() {
+    if (visibleStockIds.length === 0) return;
+    setSelectedStockIds((prev) => {
+      const prevSet = new Set(prev);
+      const hasAllVisible = visibleStockIds.every((id) => prevSet.has(id));
+      if (hasAllVisible) {
+        return prev.filter((id) => !visibleStockIdSet.has(id));
+      }
+      const next = new Set(prev);
+      for (const id of visibleStockIds) next.add(id);
+      return Array.from(next);
+    });
+  }
+
+  function runDeleteSelected() {
+    if (selectedVisibleCount === 0 || deletingMany || deletingId) return;
+    setRowError(null);
+    setDeletingMany(true);
+    const idsToDelete = selectedStockIds.filter((id) => visibleStockIdSet.has(id));
+    startDelete(async () => {
+      const r = await deleteStockMany(idsToDelete);
+      if (r.error) {
+        setRowError(r.error);
+        setDeletingMany(false);
+        return;
+      }
+      if (editingId && idsToDelete.includes(editingId)) setEditingId(null);
+      setSelectedStockIds((prev) => prev.filter((id) => !idsToDelete.includes(id)));
+      setDeletingMany(false);
       router.refresh();
     });
   }
@@ -605,7 +658,7 @@ export function StockManager({
                 </p>
               )}
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -617,6 +670,26 @@ export function StockManager({
               >
                 Add new
               </button>
+              {canManage ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleSelectAllVisible}
+                    disabled={visibleStockIds.length === 0}
+                    className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {allVisibleSelected ? "Clear selection" : "Select all"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={runDeleteSelected}
+                    disabled={selectedVisibleCount === 0 || deletingMany || deletingId != null}
+                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {deletingMany ? "Deleting..." : `Delete selected (${selectedVisibleCount})`}
+                  </button>
+                </>
+              ) : null}
               <button
                 type="button"
                 onClick={handleExportExcel}
@@ -667,6 +740,18 @@ export function StockManager({
                 <div className="divide-y divide-[#245236]/15 md:hidden">
                   {filteredVisibleStock.map((row) => (
                     <article key={row.id} className="space-y-3 p-4">
+                      {canManage ? (
+                        <label className="inline-flex items-center gap-2 text-xs font-medium text-[#245236]/80">
+                          <input
+                            type="checkbox"
+                            checked={selectedStockIds.includes(row.id)}
+                            onChange={() => toggleSelectStock(row.id)}
+                            disabled={deletingMany || deletingId != null}
+                            className="h-4 w-4 rounded border-[#245236]/40 text-[#245236] focus:ring-[#245236]/30"
+                          />
+                          Select
+                        </label>
+                      ) : null}
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-xs text-[#245236]/70">Stock #</p>
@@ -742,7 +827,7 @@ export function StockManager({
                               <button
                                 type="button"
                                 onClick={() => runDelete(row.id)}
-                                disabled={deletingId === row.id}
+                                disabled={deletingMany || deletingId === row.id}
                                 className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
                               >
                                 {deletingId === row.id ? "Deleting..." : "Delete"}
@@ -761,6 +846,18 @@ export function StockManager({
                   <table className="w-full min-w-[1120px] text-left text-sm">
                   <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                     <tr>
+                      {canManage ? (
+                        <th className="w-12 px-4 py-3">
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={toggleSelectAllVisible}
+                            disabled={visibleStockIds.length === 0 || deletingMany || deletingId != null}
+                            aria-label="Select all visible rows"
+                            className="h-4 w-4 rounded border-[#245236]/40 text-[#245236] focus:ring-[#245236]/30"
+                          />
+                        </th>
+                      ) : null}
                       <th className="px-4 py-3">Stock #</th>
                       <th className="px-4 py-3">Inventory #</th>
                       <th className="px-4 py-3">Product</th>
@@ -780,6 +877,18 @@ export function StockManager({
                         className="hover:bg-[#FEED01]/20"
                       >
                         <>
+                          {canManage ? (
+                            <td className="px-4 py-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedStockIds.includes(row.id)}
+                                onChange={() => toggleSelectStock(row.id)}
+                                disabled={deletingMany || deletingId != null}
+                                aria-label={`Select stock row ${row.stock_number ?? row.id}`}
+                                className="h-4 w-4 rounded border-[#245236]/40 text-[#245236] focus:ring-[#245236]/30"
+                              />
+                            </td>
+                          ) : null}
                           <td className="px-4 py-3 font-medium text-[#245236]">
                             {row.stock_number ?? "—"}
                           </td>
@@ -826,7 +935,7 @@ export function StockManager({
                                   <button
                                     type="button"
                                     onClick={() => runDelete(row.id)}
-                                    disabled={deletingId === row.id}
+                                    disabled={deletingMany || deletingId === row.id}
                                     className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
                                   >
                                     {deletingId === row.id ? "Deleting..." : "Delete"}
