@@ -2,18 +2,28 @@
 
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { createStock, deleteStock, deleteStockMany, updateStock } from "./actions";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  createStock,
+  deleteStock,
+  deleteStockMany,
+  duplicateStock,
+  updateStock,
+} from "./actions";
 import Modal from "@/app/components/Modal";
-import type {
-  BrandOption,
-  FabricOption,
-  InventoryStockContext,
-  ProductOption,
-  SizeOption,
-  StockRow,
-  StyleOption,
+import { downloadWorkbookAsXlsx } from "@/lib/download-xlsx";
+import {
+  STOCK_BARCODE_MIN,
+  type BrandOption,
+  type FabricOption,
+  type InventoryStockContext,
+  type ProductOption,
+  type SizeOption,
+  type StockRow,
+  type StyleOption,
 } from "./types";
+
+const STOCK_RESULTS_PAGE_SIZE = 25;
 
 type Props = {
   stock: StockRow[];
@@ -70,6 +80,7 @@ function buildCreateStockSummary(
     { label: "Style", value: styleName },
     { label: "Fabric", value: fabricName },
     { label: "Stock number", value: emptyToDash(fd.get("stock_number")) },
+    { label: "Barcode", value: emptyToDash(fd.get("barcode")) },
     { label: "Inventory number", value: emptyToDash(fd.get("inventory_number")) },
     { label: "Size", value: sizeLabel },
     { label: "Pieces", value: emptyToDash(fd.get("pieces")) },
@@ -98,6 +109,7 @@ export function StockManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [inventorySearch, setInventorySearch] = useState("");
+  const [globalStockSearch, setGlobalStockSearch] = useState("");
   const [entrySearch, setEntrySearch] = useState("");
   const [searchedInventoryNumber, setSearchedInventoryNumber] = useState("");
   const [activeInventoryNumber, setActiveInventoryNumber] = useState<string | null>(null);
@@ -109,8 +121,10 @@ export function StockManager({
   >(null);
   const [createConfirmSubmitting, setCreateConfirmSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
   const [deletingMany, setDeletingMany] = useState(false);
   const [selectedStockIds, setSelectedStockIds] = useState<string[]>([]);
+  const [stockResultsPage, setStockResultsPage] = useState(1);
 
   const productById = useMemo(
     () => new Map(products.map((p) => [p.id, p] as const)),
@@ -132,20 +146,23 @@ export function StockManager({
     [sizes],
   );
 
-  const brandLabel = (brandId: string | null | undefined) => {
+  const brandLabel = useCallback((brandId: string | null | undefined) => {
     if (!brandId?.trim()) return "—";
     const b = brands.find((x) => x.id === brandId);
     if (b?.brand_name?.trim()) return b.brand_name;
     return brandId;
-  };
+  }, [brands]);
 
-  const productRowLabel = (row: StockRow) => {
-    const pid = row.product;
-    if (!pid?.trim()) return "—";
-    const p = productById.get(pid);
-    if (!p) return pid;
-    return p.product_name?.trim() || "Unnamed";
-  };
+  const productRowLabel = useCallback(
+    (row: StockRow) => {
+      const pid = row.product;
+      if (!pid?.trim()) return "—";
+      const p = productById.get(pid);
+      if (!p) return pid;
+      return p.product_name?.trim() || "Unnamed";
+    },
+    [productById],
+  );
 
   const searchPrefix = searchedInventoryNumber.trim();
   const searchPrefixLower = searchPrefix.toLowerCase();
@@ -166,17 +183,40 @@ export function StockManager({
     );
   }, [matchingInventories, activeInventoryNumber]);
 
-  const filteredStock = useMemo(() => {
+  const globalSearchLower = globalStockSearch.trim().toLowerCase();
+  const stockScopeFiltered = useMemo(() => {
+    if (globalSearchLower) {
+      return stock.filter((row) =>
+        stockRowMatchesLikeSearch(row, globalSearchLower, {
+          productName:
+            productById.get(row.product ?? "")?.product_name?.trim() || productRowLabel(row),
+          brandName: brandLabel(row.brand_name),
+          styleName: styleById.get(row.style ?? "")?.style_name?.trim() || "",
+          fabricName: fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "",
+          sizeLabel: sizeById.get(row.size ?? "")?.size?.trim() || row.size || "",
+        }),
+      );
+    }
     if (!searchPrefixLower) return [];
     return stock.filter((row) =>
       (row.inventory_number?.trim().toLowerCase() ?? "").includes(searchPrefixLower),
     );
-  }, [stock, searchPrefixLower]);
+  }, [
+    stock,
+    globalSearchLower,
+    searchPrefixLower,
+    productById,
+    productRowLabel,
+    brandLabel,
+    styleById,
+    fabricById,
+    sizeById,
+  ]);
 
   const entrySearchLower = entrySearch.trim().toLowerCase();
   const filteredVisibleStock = useMemo(() => {
-    if (!entrySearchLower) return filteredStock;
-    return filteredStock.filter((row) =>
+    if (!entrySearchLower) return stockScopeFiltered;
+    return stockScopeFiltered.filter((row) =>
       stockRowMatchesLikeSearch(row, entrySearchLower, {
         productName:
           productById.get(row.product ?? "")?.product_name?.trim() || productRowLabel(row),
@@ -187,7 +227,7 @@ export function StockManager({
       }),
     );
   }, [
-    filteredStock,
+    stockScopeFiltered,
     entrySearchLower,
     productById,
     productRowLabel,
@@ -196,6 +236,32 @@ export function StockManager({
     fabricById,
     sizeById,
   ]);
+
+  const stockFilterKey = `${globalSearchLower}\0${searchPrefixLower}\0${entrySearchLower}`;
+  const prevStockFilterKeyRef = useRef(stockFilterKey);
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(filteredVisibleStock.length / STOCK_RESULTS_PAGE_SIZE));
+    const filterChanged = prevStockFilterKeyRef.current !== stockFilterKey;
+    prevStockFilterKeyRef.current = stockFilterKey;
+    setStockResultsPage((p) => {
+      if (filterChanged) return 1;
+      return p > totalPages ? totalPages : p;
+    });
+  }, [stockFilterKey, filteredVisibleStock.length]);
+
+  const stockResultsTotal = filteredVisibleStock.length;
+  const stockResultsTotalPages = Math.max(1, Math.ceil(stockResultsTotal / STOCK_RESULTS_PAGE_SIZE));
+  const paginatedVisibleStock = useMemo(() => {
+    const start = (stockResultsPage - 1) * STOCK_RESULTS_PAGE_SIZE;
+    return filteredVisibleStock.slice(start, start + STOCK_RESULTS_PAGE_SIZE);
+  }, [filteredVisibleStock, stockResultsPage]);
+
+  const stockResultsRangeStart =
+    stockResultsTotal === 0 ? 0 : (stockResultsPage - 1) * STOCK_RESULTS_PAGE_SIZE + 1;
+  const stockResultsRangeEnd = Math.min(
+    stockResultsTotal,
+    stockResultsPage * STOCK_RESULTS_PAGE_SIZE,
+  );
 
   const visibleStockIds = useMemo(() => filteredVisibleStock.map((row) => row.id), [filteredVisibleStock]);
   const visibleStockIdSet = useMemo(() => new Set(visibleStockIds), [visibleStockIds]);
@@ -211,6 +277,15 @@ export function StockManager({
     return stock.find((row) => row.id === editingId) ?? null;
   }, [stock, editingId]);
 
+  const nextStockBarcode = useMemo(() => {
+    let max = 0;
+    for (const r of stock) {
+      const b = r.barcode;
+      if (typeof b === "number" && Number.isFinite(b) && b > max) max = b;
+    }
+    return Math.max(max, STOCK_BARCODE_MIN - 1) + 1;
+  }, [stock]);
+
   const prefixMatchedStockOnly = useMemo(() => {
     if (!searchPrefixLower) return [];
     return stock.filter((row) =>
@@ -219,11 +294,17 @@ export function StockManager({
   }, [stock, searchPrefixLower]);
 
   const hasSearchResults =
-    searchPrefix.length > 0 &&
-    (matchingInventories.length > 0 || prefixMatchedStockOnly.length > 0);
+    globalSearchLower.length > 0
+      ? stockScopeFiltered.length > 0
+      : searchPrefix.length > 0 &&
+        (matchingInventories.length > 0 || prefixMatchedStockOnly.length > 0);
 
   useEffect(() => {
-    setSelectedStockIds((prev) => prev.filter((id) => visibleStockIdSet.has(id)));
+    setSelectedStockIds((prev) => {
+      const next = prev.filter((id) => visibleStockIdSet.has(id));
+      if (next.length === prev.length && next.every((id, i) => id === prev[i])) return prev;
+      return next;
+    });
   }, [visibleStockIdSet]);
 
   function closeCreateModal() {
@@ -287,7 +368,7 @@ export function StockManager({
   }
 
   function runDelete(id: string) {
-    if (deletingMany) return;
+    if (deletingMany || duplicatingId != null) return;
     setRowError(null);
     setDeletingId(id);
     startDelete(async () => {
@@ -299,6 +380,22 @@ export function StockManager({
       }
       if (editingId === id) setEditingId(null);
       setDeletingId(null);
+      router.refresh();
+    });
+  }
+
+  function runDuplicate(id: string) {
+    if (deletingMany || deletingId != null || duplicatingId != null) return;
+    setRowError(null);
+    setDuplicatingId(id);
+    startDelete(async () => {
+      const r = await duplicateStock(id);
+      if (r.error) {
+        setRowError(r.error);
+        setDuplicatingId(null);
+        return;
+      }
+      setDuplicatingId(null);
       router.refresh();
     });
   }
@@ -322,7 +419,7 @@ export function StockManager({
   }
 
   function runDeleteSelected() {
-    if (selectedVisibleCount === 0 || deletingMany || deletingId) return;
+    if (selectedVisibleCount === 0 || deletingMany || deletingId || duplicatingId != null) return;
     setRowError(null);
     setDeletingMany(true);
     const idsToDelete = selectedStockIds.filter((id) => visibleStockIdSet.has(id));
@@ -345,6 +442,7 @@ export function StockManager({
 
     const columns = [
       "Stock No",
+      "Barcode",
       "Product",
       "Brand",
       "Style",
@@ -357,13 +455,14 @@ export function StockManager({
       "Size",
     ];
 
-    const csvRows = filteredVisibleStock.map((row) => {
+    const dataRows = filteredVisibleStock.map((row) => {
       const p = productById.get(row.product ?? "");
       const productName = p?.product_name?.trim() || productRowLabel(row);
       const style = styleById.get(row.style ?? "")?.style_name?.trim() ?? "";
       const fabric = fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() ?? "";
       return [
         row.stock_number,
+        row.barcode,
         productName,
         brandLabel(row.brand_name),
         style,
@@ -374,23 +473,15 @@ export function StockManager({
         row.selling_price,
         row.mrp,
         row.size,
-      ].map(toCsvCell);
+      ];
     });
 
-    const csv = [columns.map(toCsvCell), ...csvRows].map((line) => line.join(",")).join("\n");
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const baseName =
-      selectedInventory?.inventory_number ?? (searchedInventoryNumber.trim() || "export");
+    const baseName = globalSearchLower
+      ? `all-stock-${globalStockSearch.trim().slice(0, 40)}`
+      : (selectedInventory?.inventory_number ?? (searchedInventoryNumber.trim() || "export"));
     const safeName = baseName.replaceAll(/[^a-z0-9_-]/gi, "-");
-    const fileName = `stock-${safeName}-${new Date().toISOString().slice(0, 10)}.csv`;
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    const fileName = `stock-${safeName}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    downloadWorkbookAsXlsx([columns, ...dataRows], fileName, "Stock");
   }
 
   function handleInventorySearch(event: React.FormEvent<HTMLFormElement>) {
@@ -442,6 +533,7 @@ export function StockManager({
                 setInventorySearch("");
                 setSearchedInventoryNumber("");
                 setActiveInventoryNumber(null);
+                setGlobalStockSearch("");
                 setEntrySearch("");
                 closeCreateModal();
               }}
@@ -452,6 +544,33 @@ export function StockManager({
           </div>
         </form>
 
+        <div className="mt-5 border-t border-[#245236]/15 pt-5">
+          <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
+            Search entire inventory table
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <input
+                type="search"
+                value={globalStockSearch}
+                onChange={(event) => setGlobalStockSearch(event.target.value)}
+                autoComplete="off"
+                placeholder="Match any column across all stock rows…"
+                className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+              />
+              {globalStockSearch.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setGlobalStockSearch("")}
+                  className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
+          </label>
+          <p className="mt-1.5 text-[11px] text-[#245236]/60">
+            Filters as you type (stock #, barcode, inventory #, product, brand, style, fabric, size, prices, HSN, GST, dates).
+          </p>
+        </div>
       </section>
 
       <Modal
@@ -486,6 +605,7 @@ export function StockManager({
                 sizes={sizes}
                 inventoryChoices={inventoryForStock}
                 lockedInventoryNumber={selectedInventory.inventory_number}
+                prefillBarcode={nextStockBarcode}
               />
             </form>
           </div>
@@ -578,7 +698,6 @@ export function StockManager({
               fabrics={fabrics}
               sizes={sizes}
               inventoryChoices={inventoryForStock}
-              restrictEditToEmptyFields={allowRestrictedEdit && !canManage}
             />
             <div className="flex gap-2">
               <SubmitButton className="h-[38px] rounded-lg bg-[#245236] px-3 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60">
@@ -608,109 +727,185 @@ export function StockManager({
         </p>
       ) : null}
 
-      {searchedInventoryNumber.trim() === "" ? (
+      {globalSearchLower.length === 0 && searchedInventoryNumber.trim() === "" ? (
         <div className="rounded-xl border border-dashed border-[#245236]/30 bg-white p-10 text-center text-sm text-[#245236]/70 shadow-sm">
-          Search for an inventory number to view its details and the stock rows linked to it.
+          Search for an inventory number to view its details and linked stock rows, or use{" "}
+          <span className="font-medium text-[#245236]">Search entire stock table</span> above to find rows across all
+          inventories.
         </div>
       ) : !hasSearchResults ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
-          Nothing matches prefix{" "}
-          <span className="font-medium">{searchedInventoryNumber}</span> (no inventory or stock rows starting with
-          that text).
+          {globalSearchLower.length > 0 ? (
+            <>
+              Nothing in the stock table matches{" "}
+              <span className="font-medium">{globalStockSearch.trim()}</span>.
+            </>
+          ) : (
+            <>
+              Nothing matches prefix{" "}
+              <span className="font-medium">{searchedInventoryNumber}</span> (no inventory or stock rows starting with
+              that text).
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
-            <div className="min-w-0 flex-1 space-y-3">
-              <p className="text-sm font-medium text-[#245236]">
-                Prefix <span className="tabular-nums">{searchedInventoryNumber}</span>
-                {matchingInventories.length > 1 ? (
-                  <span className="ml-2 font-normal text-[#245236]/70">
-                    ({matchingInventories.length} inventory matches)
-                  </span>
+          {globalSearchLower.length > 0 ? (
+            <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1 space-y-1">
+                <p className="text-sm font-medium text-[#245236]">All stock</p>
+                <p className="text-xs text-[#245236]/75">
+                  {entrySearch.trim() ? (
+                    <>
+                      Showing <span className="tabular-nums">{filteredVisibleStock.length}</span> of{" "}
+                      <span className="tabular-nums">{stockScopeFiltered.length}</span> row
+                      {stockScopeFiltered.length === 1 ? "" : "s"} matching{" "}
+                      <span className="font-medium">“{globalStockSearch.trim()}”</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="tabular-nums">{filteredVisibleStock.length}</span>{" "}
+                      {filteredVisibleStock.length === 1 ? "row" : "rows"}{" "}
+                      {filteredVisibleStock.length === 1 ? "matches" : "match"}{" "}
+                      <span className="font-medium">“{globalStockSearch.trim()}”</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {canManage ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleSelectAllVisible}
+                      disabled={visibleStockIds.length === 0}
+                      className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {allVisibleSelected ? "Clear selection" : "Select all"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={runDeleteSelected}
+                      disabled={
+                        selectedVisibleCount === 0 ||
+                        deletingMany ||
+                        deletingId != null ||
+                        duplicatingId != null
+                      }
+                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deletingMany ? "Deleting..." : `Delete selected (${selectedVisibleCount})`}
+                    </button>
+                  </>
                 ) : null}
-              </p>
-              {matchingInventories.length > 1 ? (
-                <label className="flex max-w-md flex-col gap-1 text-xs font-medium text-[#245236]/80">
-                  Inventory number (choose row for details and Add new)
-                  <select
-                    value={activeInventoryNumber ?? matchingInventories[0]?.inventory_number ?? ""}
-                    onChange={(e) => setActiveInventoryNumber(e.target.value)}
-                    className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
-                  >
-                    {matchingInventories.map((m) => (
-                      <option key={m.inventory_number} value={m.inventory_number}>
-                        {m.inventory_number}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : matchingInventories.length === 1 ? (
-                <p className="text-xs text-[#245236]/80">
-                  Inventory <span className="font-medium tabular-nums">{matchingInventories[0].inventory_number}</span>
-                </p>
-              ) : null}
-              {selectedInventory ? (
-                <InventoryContextReadonly context={selectedInventory} />
-              ) : (
-                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                  No inventory master row starts with this prefix; stock rows below still match your search.
-                </p>
-              )}
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  disabled={filteredVisibleStock.length === 0}
+                  className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Export Excel
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setFormError(null);
-                  setIsCreateOpen(true);
-                }}
-                disabled={selectedInventory == null}
-                className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Add new
-              </button>
-              {canManage ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={toggleSelectAllVisible}
-                    disabled={visibleStockIds.length === 0}
-                    className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {allVisibleSelected ? "Clear selection" : "Select all"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={runDeleteSelected}
-                    disabled={selectedVisibleCount === 0 || deletingMany || deletingId != null}
-                    className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {deletingMany ? "Deleting..." : `Delete selected (${selectedVisibleCount})`}
-                  </button>
-                </>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleExportExcel}
-                disabled={filteredVisibleStock.length === 0}
-                className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Export Excel
-              </button>
+          ) : (
+            <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1 space-y-3">
+                <p className="text-sm font-medium text-[#245236]">
+                  Prefix <span className="tabular-nums">{searchedInventoryNumber}</span>
+                  {matchingInventories.length > 1 ? (
+                    <span className="ml-2 font-normal text-[#245236]/70">
+                      ({matchingInventories.length} inventory matches)
+                    </span>
+                  ) : null}
+                </p>
+                {matchingInventories.length > 1 ? (
+                  <label className="flex max-w-md flex-col gap-1 text-xs font-medium text-[#245236]/80">
+                    Inventory number (choose row for details and Add new)
+                    <select
+                      value={activeInventoryNumber ?? matchingInventories[0]?.inventory_number ?? ""}
+                      onChange={(e) => setActiveInventoryNumber(e.target.value)}
+                      className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                    >
+                      {matchingInventories.map((m) => (
+                        <option key={m.inventory_number} value={m.inventory_number}>
+                          {m.inventory_number}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : matchingInventories.length === 1 ? (
+                  <p className="text-xs text-[#245236]/80">
+                    Inventory <span className="font-medium tabular-nums">{matchingInventories[0].inventory_number}</span>
+                  </p>
+                ) : null}
+                {selectedInventory ? (
+                  <InventoryContextReadonly context={selectedInventory} />
+                ) : (
+                  <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    No inventory master row starts with this prefix; stock rows below still match your search.
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormError(null);
+                    setIsCreateOpen(true);
+                  }}
+                  disabled={selectedInventory == null}
+                  className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Add new
+                </button>
+                {canManage ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleSelectAllVisible}
+                      disabled={visibleStockIds.length === 0}
+                      className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {allVisibleSelected ? "Clear selection" : "Select all"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={runDeleteSelected}
+                      disabled={
+                        selectedVisibleCount === 0 ||
+                        deletingMany ||
+                        deletingId != null ||
+                        duplicatingId != null
+                      }
+                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {deletingMany ? "Deleting..." : `Delete selected (${selectedVisibleCount})`}
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={handleExportExcel}
+                  disabled={filteredVisibleStock.length === 0}
+                  className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Export Excel
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           <section className="rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm">
             <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
-              Search displayed entries
+              {globalSearchLower.length > 0 ? "Filter results" : "Search displayed entries"}
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <input
                   type="search"
                   value={entrySearch}
                   onChange={(e) => setEntrySearch(e.target.value)}
                   autoComplete="off"
-                  placeholder="Search stock #, product, brand, style, fabric, size, pricing..."
+                  placeholder="Search stock #, barcode, product, brand, style, fabric, size, pricing..."
                   className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
                 />
                 {entrySearch.trim() ? (
@@ -731,14 +926,16 @@ export function StockManager({
               <p className="p-8 text-center text-sm text-zinc-500">
                 {entrySearch.trim()
                   ? `No rows match "${entrySearch.trim()}". Try a shorter or different term.`
-                  : selectedInventory
-                    ? `No stock rows for inventory ${selectedInventory.inventory_number} yet.`
-                    : "No stock rows start with this prefix yet."}
+                  : globalSearchLower.length > 0
+                    ? `No rows match "${globalStockSearch.trim()}" in the full table.`
+                    : selectedInventory
+                      ? `No stock rows for inventory ${selectedInventory.inventory_number} yet.`
+                      : "No stock rows start with this prefix yet."}
               </p>
             ) : (
               <>
                 <div className="divide-y divide-[#245236]/15 md:hidden">
-                  {filteredVisibleStock.map((row) => (
+                  {paginatedVisibleStock.map((row) => (
                     <article key={row.id} className="space-y-3 p-4">
                       {canManage ? (
                         <label className="inline-flex items-center gap-2 text-xs font-medium text-[#245236]/80">
@@ -746,21 +943,25 @@ export function StockManager({
                             type="checkbox"
                             checked={selectedStockIds.includes(row.id)}
                             onChange={() => toggleSelectStock(row.id)}
-                            disabled={deletingMany || deletingId != null}
+                            disabled={deletingMany || deletingId != null || duplicatingId != null}
                             className="h-4 w-4 rounded border-[#245236]/40 text-[#245236] focus:ring-[#245236]/30"
                           />
                           Select
                         </label>
                       ) : null}
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
                         <div>
                           <p className="text-xs text-[#245236]/70">Stock #</p>
                           <p className="text-sm font-semibold text-[#245236]">
                             {row.stock_number ?? "—"}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs text-[#245236]/70">Inventory #</p>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Barcode</p>
+                          <StockBarcodeCell barcode={row.barcode} />
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Inv #</p>
                           <p className="text-sm font-medium text-[#245236]">
                             {row.inventory_number ?? "—"}
                           </p>
@@ -819,15 +1020,32 @@ export function StockManager({
                                 setRowError(null);
                                 setEditingId(row.id);
                               }}
-                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                              disabled={duplicatingId != null}
+                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => runDuplicate(row.id)}
+                              disabled={
+                                deletingMany ||
+                                deletingId != null ||
+                                duplicatingId != null
+                              }
+                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
                             </button>
                             {canManage ? (
                               <button
                                 type="button"
                                 onClick={() => runDelete(row.id)}
-                                disabled={deletingMany || deletingId === row.id}
+                                disabled={
+                                  deletingMany ||
+                                  deletingId === row.id ||
+                                  duplicatingId != null
+                                }
                                 className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
                               >
                                 {deletingId === row.id ? "Deleting..." : "Delete"}
@@ -843,7 +1061,7 @@ export function StockManager({
                 </div>
 
                 <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[1120px] text-left text-sm">
+                  <table className="w-full min-w-[1200px] text-left text-sm">
                   <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                     <tr>
                       {canManage ? (
@@ -852,13 +1070,19 @@ export function StockManager({
                             type="checkbox"
                             checked={allVisibleSelected}
                             onChange={toggleSelectAllVisible}
-                            disabled={visibleStockIds.length === 0 || deletingMany || deletingId != null}
+                            disabled={
+                              visibleStockIds.length === 0 ||
+                              deletingMany ||
+                              deletingId != null ||
+                              duplicatingId != null
+                            }
                             aria-label="Select all visible rows"
                             className="h-4 w-4 rounded border-[#245236]/40 text-[#245236] focus:ring-[#245236]/30"
                           />
                         </th>
                       ) : null}
                       <th className="px-4 py-3">Stock #</th>
+                      <th className="px-4 py-3">Barcode</th>
                       <th className="px-4 py-3">Inventory #</th>
                       <th className="px-4 py-3">Product</th>
                       <th className="px-4 py-3">Brand</th>
@@ -871,7 +1095,7 @@ export function StockManager({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#245236]/15">
-                    {filteredVisibleStock.map((row) => (
+                    {paginatedVisibleStock.map((row) => (
                       <tr
                         key={row.id}
                         className="hover:bg-[#FEED01]/20"
@@ -883,7 +1107,7 @@ export function StockManager({
                                 type="checkbox"
                                 checked={selectedStockIds.includes(row.id)}
                                 onChange={() => toggleSelectStock(row.id)}
-                                disabled={deletingMany || deletingId != null}
+                                disabled={deletingMany || deletingId != null || duplicatingId != null}
                                 aria-label={`Select stock row ${row.stock_number ?? row.id}`}
                                 className="h-4 w-4 rounded border-[#245236]/40 text-[#245236] focus:ring-[#245236]/30"
                               />
@@ -891,6 +1115,9 @@ export function StockManager({
                           ) : null}
                           <td className="px-4 py-3 font-medium text-[#245236]">
                             {row.stock_number ?? "—"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StockBarcodeCell barcode={row.barcode} table />
                           </td>
                           <td className="px-4 py-3 font-medium tabular-nums text-[#245236]/90">
                             {row.inventory_number ?? "—"}
@@ -927,15 +1154,32 @@ export function StockManager({
                                     setRowError(null);
                                     setEditingId(row.id);
                                   }}
-                                  className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+                                  disabled={duplicatingId != null}
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => runDuplicate(row.id)}
+                                  disabled={
+                                    deletingMany ||
+                                    deletingId != null ||
+                                    duplicatingId != null
+                                  }
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
                                 </button>
                                 {canManage ? (
                                   <button
                                     type="button"
                                     onClick={() => runDelete(row.id)}
-                                    disabled={deletingMany || deletingId === row.id}
+                                    disabled={
+                                      deletingMany ||
+                                      deletingId === row.id ||
+                                      duplicatingId != null
+                                    }
                                     className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
                                   >
                                     {deletingId === row.id ? "Deleting..." : "Delete"}
@@ -954,6 +1198,43 @@ export function StockManager({
                   </tbody>
                   </table>
                 </div>
+
+                {stockResultsTotalPages > 1 ? (
+                  <div className="flex flex-col gap-3 border-t border-[#245236]/15 bg-[#FEED01]/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-xs text-[#245236]/75">
+                      Showing{" "}
+                      <span className="tabular-nums font-medium text-[#245236]">
+                        {stockResultsRangeStart}–{stockResultsRangeEnd}
+                      </span>{" "}
+                      of <span className="tabular-nums font-medium text-[#245236]">{stockResultsTotal}</span>
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setStockResultsPage((p) => Math.max(1, p - 1))}
+                        disabled={stockResultsPage <= 1}
+                        className="rounded-lg border border-[#245236]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#245236] hover:bg-[#FEED01]/40 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Previous
+                      </button>
+                      <span className="text-xs text-[#245236]/80">
+                        Page{" "}
+                        <span className="tabular-nums font-medium text-[#245236]">{stockResultsPage}</span> of{" "}
+                        <span className="tabular-nums font-medium text-[#245236]">{stockResultsTotalPages}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStockResultsPage((p) => Math.min(stockResultsTotalPages, p + 1))
+                        }
+                        disabled={stockResultsPage >= stockResultsTotalPages}
+                        className="rounded-lg border border-[#245236]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#245236] hover:bg-[#FEED01]/40 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </>
             )}
           </div>
@@ -1007,6 +1288,30 @@ function InventoryContextReadonly({ context }: { context: InventoryStockContext 
   );
 }
 
+function StockBarcodeCell({
+  barcode,
+  table = false,
+}: {
+  barcode: number | null;
+  table?: boolean;
+}) {
+  if (barcode != null) {
+    const cls = table
+      ? "font-medium tabular-nums text-[#245236]/90"
+      : "text-sm font-medium tabular-nums text-[#245236]";
+    return <span className={cls}>{barcode}</span>;
+  }
+  const emptyCls = table ? "text-xs italic text-zinc-500" : "text-sm italic text-zinc-500";
+  return (
+    <span
+      className={emptyCls}
+      title="No barcode stored yet. New stock rows receive the next number automatically on create."
+    >
+      Not assigned
+    </span>
+  );
+}
+
 function stkHasStr(s: string | null | undefined) {
   return s != null && String(s).trim() !== "";
 }
@@ -1038,6 +1343,7 @@ function StockFormFields({
   sizes,
   inventoryChoices,
   lockedInventoryNumber,
+  prefillBarcode,
   restrictEditToEmptyFields = false,
 }: {
   mode: "create" | "edit";
@@ -1049,6 +1355,8 @@ function StockFormFields({
   sizes: SizeOption[];
   inventoryChoices: InventoryStockContext[];
   lockedInventoryNumber?: string | null;
+  /** Next barcode shown read-only when creating (server assigns the value on save). */
+  prefillBarcode?: number;
   restrictEditToEmptyFields?: boolean;
 }) {
   const v = values;
@@ -1125,6 +1433,21 @@ function StockFormFields({
           placeholder="STK-001"
           readOnly={ro && stkHasStr(v?.stock_number)}
         />
+        {mode === "create" && prefillBarcode != null ? (
+          <FormInput
+            name="barcode"
+            label="Barcode"
+            value={String(prefillBarcode)}
+            placeholder=""
+            readOnly
+          />
+        ) : null}
+        {mode === "edit" && v ? (
+          <ReadonlyFormField
+            label="Barcode"
+            value={v.barcode != null ? String(v.barcode) : "Not assigned"}
+          />
+        ) : null}
         {inventoryLocked ? (
           <ReadonlyFormField
             label="Inventory"
@@ -1432,11 +1755,6 @@ function formatMoney(value: number | null) {
   }
 }
 
-function toCsvCell(value: string | number | null | undefined) {
-  const text = value == null ? "" : String(value);
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
 function stockRowMatchesLikeSearch(
   row: StockRow,
   needleLower: string,
@@ -1451,6 +1769,7 @@ function stockRowMatchesLikeSearch(
   if (!needleLower) return true;
   const haystacks = [
     row.stock_number,
+    row.barcode,
     row.inventory_number,
     labels.productName,
     labels.brandName,

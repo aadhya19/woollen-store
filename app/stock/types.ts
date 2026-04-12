@@ -1,5 +1,10 @@
+/** Barcodes are auto-assigned from this value upward on new stock rows. */
+export const STOCK_BARCODE_MIN = 15000;
+
 export type StockRow = {
   id: string;
+  /** Monotonic stock barcode; assigned from 15000 upward on create. */
+  barcode: number | null;
   stock_number: string | null;
   inventory_number: string | null;
   brand_name: string | null;
@@ -18,6 +23,31 @@ export type StockRow = {
   created_at: string;
   updated_at: string | null;
 };
+
+/** Normalize `barcode` / `Barcode` from PostgREST into a safe integer or null. */
+export function coerceStockBarcode(raw: unknown): number | null {
+  if (raw == null) return null;
+  if (typeof raw === "number" && Number.isFinite(raw) && Number.isSafeInteger(raw)) {
+    return raw;
+  }
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    if (!t) return null;
+    if (!/^-?\d+$/.test(t)) return null;
+    const n = Number(t);
+    return Number.isSafeInteger(n) ? n : null;
+  }
+  return null;
+}
+
+/** Attach coerced `barcode` to each API row (handles alternate JSON keys). */
+export function normalizeStockRowsFromApi(rows: unknown[]): StockRow[] {
+  return rows.map((row) => {
+    const r = row as Record<string, unknown>;
+    const barcode = coerceStockBarcode(r.barcode ?? r.Barcode);
+    return { ...r, barcode } as StockRow;
+  });
+}
 
 export type ProductOption = {
   id: string;

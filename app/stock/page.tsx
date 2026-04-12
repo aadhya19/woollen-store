@@ -3,14 +3,14 @@ import { requireAuth } from "@/lib/auth";
 import PageHeader from "@/app/components/PageHeader";
 import { StockManager } from "./stock-manager";
 import type { AgentLookupRow } from "../inventory/types";
-import type {
-  BrandOption,
-  FabricOption,
-  InventoryStockContext,
-  ProductOption,
-  SizeOption,
-  StockRow,
-  StyleOption,
+import {
+  normalizeStockRowsFromApi,
+  type BrandOption,
+  type FabricOption,
+  type InventoryStockContext,
+  type ProductOption,
+  type SizeOption,
+  type StyleOption,
 } from "./types";
 
 function resolveAgentDisplayName(
@@ -48,7 +48,7 @@ export default async function StockPage() {
     supabase
       .from("Stock")
       .select(
-        'id, stock_number, inventory_number, brand_name, product, style, "Fabric", "HSN_code", "GST_group", cost_price, selling_price, mrp, pieces, size, created_at, updated_at',
+        'id, barcode, stock_number, inventory_number, brand_name, product, style, "Fabric", "HSN_code", "GST_group", cost_price, selling_price, mrp, pieces, size, created_at, updated_at',
       )
       .order("created_at", { ascending: false }),
     supabase
@@ -149,7 +149,7 @@ export default async function StockPage() {
         </div>
       ) : (
         <StockManager
-          stock={(stockData ?? []) as StockRow[]}
+          stock={normalizeStockRowsFromApi(stockData ?? [])}
           products={productOptions}
           brands={brandOptions}
           styles={styleOptions}

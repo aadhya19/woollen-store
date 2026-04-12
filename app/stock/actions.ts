@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSupabase } from "@/lib/supabase";
 import { getAuthSession, requireActionRole } from "@/lib/auth";
+import { STOCK_BARCODE_MIN } from "./types";
 
 export type ActionResult = { error: string | null };
 
@@ -31,6 +32,8 @@ function parseOptionalInt(
   if (!Number.isSafeInteger(n)) return { n: null, error: "Pieces is out of range" };
   return { n, error: null };
 }
+
+const STOCK_BARCODE_FLOOR = STOCK_BARCODE_MIN - 1;
 
 function mapSupabaseError(message: string) {
   if (message.includes("row-level security")) {
@@ -129,7 +132,25 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
   if (refErr) return { error: refErr };
 
   const supabase = createSupabase();
+
+  const { data: maxBarcodeRow, error: maxBarcodeErr } = await supabase
+    .from("Stock")
+    .select("barcode")
+    .not("barcode", "is", null)
+    .order("barcode", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (maxBarcodeErr) return { error: mapSupabaseError(maxBarcodeErr.message) };
+
+  const maxExisting =
+    typeof maxBarcodeRow?.barcode === "number" && Number.isFinite(maxBarcodeRow.barcode)
+      ? maxBarcodeRow.barcode
+      : null;
+  const barcode = Math.max(maxExisting ?? 0, STOCK_BARCODE_FLOOR) + 1;
+
   const { error } = await supabase.from("Stock").insert({
+    barcode,
     stock_number,
     inventory_number,
     brand_name: refs.brand_name,
@@ -150,6 +171,64 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
   return { error: null };
 }
 
+export async function duplicateStock(id: string): Promise<ActionResult> {
+  const authError = await requireActionRole(["admin", "user"]);
+  if (authError) return { error: authError };
+
+  if (!id.trim()) return { error: "Missing stock id" };
+
+  const supabase = createSupabase();
+
+  const { data: src, error: fetchErr } = await supabase
+    .from("Stock")
+    .select(
+      "stock_number, inventory_number, brand_name, product, style, Fabric, HSN_code, GST_group, cost_price, selling_price, mrp, pieces, size",
+    )
+    .eq("id", id.trim())
+    .maybeSingle();
+
+  if (fetchErr) return { error: mapSupabaseError(fetchErr.message) };
+  if (!src) return { error: "Stock row not found" };
+
+  const { data: maxBarcodeRow, error: maxBarcodeErr } = await supabase
+    .from("Stock")
+    .select("barcode")
+    .not("barcode", "is", null)
+    .order("barcode", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (maxBarcodeErr) return { error: mapSupabaseError(maxBarcodeErr.message) };
+
+  const maxExisting =
+    typeof maxBarcodeRow?.barcode === "number" && Number.isFinite(maxBarcodeRow.barcode)
+      ? maxBarcodeRow.barcode
+      : null;
+  const barcode = Math.max(maxExisting ?? 0, STOCK_BARCODE_FLOOR) + 1;
+
+  const row = src as Record<string, unknown>;
+  const { error } = await supabase.from("Stock").insert({
+    barcode,
+    stock_number: row.stock_number ?? null,
+    inventory_number: row.inventory_number ?? null,
+    brand_name: row.brand_name ?? null,
+    product: row.product ?? null,
+    style: row.style ?? null,
+    Fabric: row.Fabric ?? null,
+    HSN_code: row.HSN_code ?? null,
+    GST_group: row.GST_group ?? null,
+    cost_price: row.cost_price ?? null,
+    selling_price: row.selling_price ?? null,
+    mrp: row.mrp ?? null,
+    pieces: row.pieces ?? null,
+    size: row.size ?? null,
+  });
+
+  if (error) return { error: mapSupabaseError(error.message) };
+  revalidatePath("/stock");
+  return { error: null };
+}
+
 type StockParsed = StockRefs & {
   stock_number: string | null;
   inventory_number: string | null;
@@ -162,58 +241,12 @@ type StockParsed = StockRefs & {
   pieces: number | null;
 };
 
-function stockStrEmpty(v: string | null | undefined): boolean {
-  if (v == null) return true;
-  return String(v).trim() === "";
-}
-
-function mergeStockForRestrictedUser(
-  existing: Record<string, unknown>,
-  next: StockParsed,
-): StockParsed {
-  const g = (k: string) => existing[k];
-  return {
-    stock_number: stockStrEmpty(g("stock_number") as string | null)
-      ? next.stock_number
-      : (g("stock_number") as string | null),
-    inventory_number: stockStrEmpty(g("inventory_number") as string | null)
-      ? next.inventory_number
-      : (g("inventory_number") as string | null),
-    brand_name: stockStrEmpty(g("brand_name") as string | null)
-      ? next.brand_name
-      : (g("brand_name") as string | null),
-    product: stockStrEmpty(g("product") as string | null)
-      ? next.product
-      : (g("product") as string | null),
-    style: stockStrEmpty(g("style") as string | null) ? next.style : (g("style") as string | null),
-    Fabric: stockStrEmpty(g("Fabric") as string | null)
-      ? next.Fabric
-      : (g("Fabric") as string | null),
-    HSN_code: stockStrEmpty(g("HSN_code") as string | null)
-      ? next.HSN_code
-      : (g("HSN_code") as string | null),
-    GST_group: stockStrEmpty(g("GST_group") as string | null)
-      ? next.GST_group
-      : (g("GST_group") as string | null),
-    size: stockStrEmpty(g("size") as string | null) ? next.size : (g("size") as string | null),
-    cost_price:
-      g("cost_price") == null ? next.cost_price : (g("cost_price") as number | null),
-    selling_price:
-      g("selling_price") == null
-        ? next.selling_price
-        : (g("selling_price") as number | null),
-    mrp: g("mrp") == null ? next.mrp : (g("mrp") as number | null),
-    pieces: g("pieces") == null ? next.pieces : (g("pieces") as number | null),
-  };
-}
-
 export async function updateStock(formData: FormData): Promise<ActionResult> {
   const session = await getAuthSession();
   if (!session) return { error: "Not authenticated. Please log in." };
   if (session.role !== "admin" && session.role !== "user") {
     return { error: "You do not have permission to perform this action." };
   }
-  const isAdmin = session.role === "admin";
 
   const id = formData.get("id")?.toString() ?? "";
   if (!id) return { error: "Missing stock id" };
@@ -257,37 +290,10 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
 
   const supabase = createSupabase();
 
-  if (isAdmin) {
-    const { error } = await supabase
-      .from("Stock")
-      .update({
-        ...parsed,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id);
-
-    if (error) return { error: mapSupabaseError(error.message) };
-    revalidatePath("/stock");
-    return { error: null };
-  }
-
-  const { data: existing, error: fetchErr } = await supabase
-    .from("Stock")
-    .select(
-      "stock_number, inventory_number, brand_name, product, style, Fabric, HSN_code, GST_group, cost_price, selling_price, mrp, pieces, size",
-    )
-    .eq("id", id)
-    .maybeSingle();
-
-  if (fetchErr) return { error: mapSupabaseError(fetchErr.message) };
-  if (!existing) return { error: "Stock row not found" };
-
-  const merged = mergeStockForRestrictedUser(existing as Record<string, unknown>, parsed);
-
   const { error } = await supabase
     .from("Stock")
     .update({
-      ...merged,
+      ...parsed,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { createInventory, deleteInventory, updateInventory } from "./actions";
 import Modal from "@/app/components/Modal";
+import { downloadWorkbookAsXlsx } from "@/lib/download-xlsx";
 import type {
   AgentLookupRow,
   InventoryRow,
@@ -291,49 +292,38 @@ export function InventoryManager({
       "Debit note",
     ];
 
-    const csvRows = filteredByAdminControls.map((row) =>
-      [
-        row.id,
-        row.inventory_number,
-        row.company_name,
-        row.agent_name,
-        row.transport_name,
-        row.waybill_number,
-        row.transport_charges,
-        row.date_of_entry,
-        row.loading_charges,
-        row.staff_name,
-        row.location,
-        row.invoice_number,
-        row.number_of_parcels,
-        row.billed_quantity,
-        row.received_quantity,
-        row.tallying,
-        row.pricing,
-        row.stickering,
-        row.supply,
-        row.invoice_amount,
-        row.invoice_date,
-        row.invoice_image_url,
-        row.product_image,
-        row.payment_details,
-        row.payment_mode,
-        row.payment_status,
-        row.debit_note,
-      ].map(toCsvCell),
-    );
+    const dataRows = filteredByAdminControls.map((row) => [
+      row.id,
+      row.inventory_number,
+      row.company_name,
+      row.agent_name,
+      row.transport_name,
+      row.waybill_number,
+      row.transport_charges,
+      row.date_of_entry,
+      row.loading_charges,
+      row.staff_name,
+      row.location,
+      row.invoice_number,
+      row.number_of_parcels,
+      row.billed_quantity,
+      row.received_quantity,
+      row.tallying,
+      row.pricing,
+      row.stickering,
+      row.supply,
+      row.invoice_amount,
+      row.invoice_date,
+      row.invoice_image_url,
+      row.product_image,
+      row.payment_details,
+      row.payment_mode,
+      row.payment_status,
+      row.debit_note,
+    ]);
 
-    const csv = [columns.map(toCsvCell), ...csvRows].map((line) => line.join(",")).join("\n");
-    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const fileName = `inventory-export-${new Date().toISOString().slice(0, 10)}.csv`;
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = fileName;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    const fileName = `inventory-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    downloadWorkbookAsXlsx([columns, ...dataRows], fileName, "Inventory");
   }
 
   return (
@@ -1582,9 +1572,3 @@ function linkCellButton(url: string | null | undefined) {
     </a>
   );
 }
-
-function toCsvCell(value: string | number | null | undefined) {
-  const text = value == null ? "" : String(value);
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
