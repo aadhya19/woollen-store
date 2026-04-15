@@ -44,3 +44,11 @@ export type UserLookupRow = {
   id: string;
   name: string | null;
 };
+
+export type InventoryExportItemRow = {
+  inventory_number: string | null;
+  item_category: string | null;
+  item_description: string | null;
+  company: string | null;
+  item_code: string | null;
+};

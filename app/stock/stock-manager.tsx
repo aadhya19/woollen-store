@@ -125,6 +125,7 @@ export function StockManager({
   const [deletingMany, setDeletingMany] = useState(false);
   const [selectedStockIds, setSelectedStockIds] = useState<string[]>([]);
   const [stockResultsPage, setStockResultsPage] = useState(1);
+  const [selectedGlobalInvoiceNumber, setSelectedGlobalInvoiceNumber] = useState<string | null>(null);
 
   const productById = useMemo(
     () => new Map(products.map((p) => [p.id, p] as const)),
@@ -164,6 +165,10 @@ export function StockManager({
     [productById],
   );
 
+  const inventoryContextByNumber = useMemo(() => {
+    return new Map(inventoryForStock.map((inv) => [inv.inventory_number, inv] as const));
+  }, [inventoryForStock]);
+
   const searchPrefix = searchedInventoryNumber.trim();
   const searchPrefixLower = searchPrefix.toLowerCase();
 
@@ -184,6 +189,57 @@ export function StockManager({
   }, [matchingInventories, activeInventoryNumber]);
 
   const globalSearchLower = globalStockSearch.trim().toLowerCase();
+  const globallyMatchedInvoices = useMemo(() => {
+    if (!globalSearchLower) return [];
+    const matchedInventoryNumbers = new Set<string>();
+    for (const inv of inventoryForStock) {
+      const haystacks = [
+        inv.inventory_number,
+        inv.invoice_number,
+        inv.invoice_date,
+        inv.invoice_amount,
+        inv.company_name,
+        inv.agent_name,
+      ];
+      const directMatch = haystacks.some((h) =>
+        String(h ?? "")
+          .toLowerCase()
+          .includes(globalSearchLower),
+      );
+      if (directMatch) matchedInventoryNumbers.add(inv.inventory_number);
+    }
+    for (const row of stock) {
+      if (
+        stockRowMatchesLikeSearch(row, globalSearchLower, {
+          productName:
+            productById.get(row.product ?? "")?.product_name?.trim() || productRowLabel(row),
+          brandName: brandLabel(row.brand_name),
+          styleName: styleById.get(row.style ?? "")?.style_name?.trim() || "",
+          fabricName: fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "",
+          sizeLabel: sizeById.get(row.size ?? "")?.size?.trim() || row.size || "",
+        })
+      ) {
+        const invNum = row.inventory_number?.trim();
+        if (invNum) matchedInventoryNumbers.add(invNum);
+      }
+    }
+    return Array.from(matchedInventoryNumbers)
+      .map((invNum) => inventoryContextByNumber.get(invNum))
+      .filter((inv): inv is InventoryStockContext => inv != null)
+      .sort((a, b) => a.inventory_number.localeCompare(b.inventory_number));
+  }, [
+    globalSearchLower,
+    inventoryForStock,
+    stock,
+    productById,
+    productRowLabel,
+    brandLabel,
+    styleById,
+    fabricById,
+    sizeById,
+    inventoryContextByNumber,
+  ]);
+
   const stockScopeFiltered = useMemo(() => {
     if (globalSearchLower) {
       return stock.filter((row) =>
@@ -212,6 +268,22 @@ export function StockManager({
     fabricById,
     sizeById,
   ]);
+
+  const activeGlobalInvoiceNumber = useMemo(() => {
+    if (!globalSearchLower) return null;
+    if (
+      selectedGlobalInvoiceNumber &&
+      globallyMatchedInvoices.some((inv) => inv.inventory_number === selectedGlobalInvoiceNumber)
+    ) {
+      return selectedGlobalInvoiceNumber;
+    }
+    return null;
+  }, [globalSearchLower, selectedGlobalInvoiceNumber, globallyMatchedInvoices]);
+
+  const globalInvoiceRelatedStock = useMemo(() => {
+    if (!activeGlobalInvoiceNumber) return [];
+    return stock.filter((row) => (row.inventory_number?.trim() ?? "") === activeGlobalInvoiceNumber);
+  }, [stock, activeGlobalInvoiceNumber]);
 
   const entrySearchLower = entrySearch.trim().toLowerCase();
   const filteredVisibleStock = useMemo(() => {
@@ -295,7 +367,7 @@ export function StockManager({
 
   const hasSearchResults =
     globalSearchLower.length > 0
-      ? stockScopeFiltered.length > 0
+      ? globallyMatchedInvoices.length > 0
       : searchPrefix.length > 0 &&
         (matchingInventories.length > 0 || prefixMatchedStockOnly.length > 0);
 
@@ -441,18 +513,19 @@ export function StockManager({
     if (filteredVisibleStock.length === 0) return;
 
     const columns = [
-      "Stock No",
-      "Barcode",
-      "Product",
-      "Brand",
+      "BARCODE",
+      "Item Description",
+      "Item Category",
+      "Company",
       "Style",
-      "Fabric",
+      "Fabric/Yarn",
+      "Size",
+      "TransQty",
       "HSN Code",
       "GST Group",
       "Cost Price",
-      "Selling Price",
       "Retail Price",
-      "Size",
+      "ITEM CODE",
     ];
 
     const dataRows = filteredVisibleStock.map((row) => {
@@ -460,19 +533,21 @@ export function StockManager({
       const productName = p?.product_name?.trim() || productRowLabel(row);
       const style = styleById.get(row.style ?? "")?.style_name?.trim() ?? "";
       const fabric = fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() ?? "";
+      const size = sizeById.get(row.size ?? "")?.size?.trim() || row.size || "";
       return [
-        row.stock_number,
         row.barcode,
+        productName,
         productName,
         brandLabel(row.brand_name),
         style,
         fabric,
+        size,
+        row.pieces,
         row.HSN_code,
         row.GST_group,
         row.cost_price,
-        row.selling_price,
         row.mrp,
-        row.size,
+        row.stock_number,
       ];
     });
 
@@ -551,7 +626,10 @@ export function StockManager({
               <input
                 type="search"
                 value={globalStockSearch}
-                onChange={(event) => setGlobalStockSearch(event.target.value)}
+                onChange={(event) => {
+                  setGlobalStockSearch(event.target.value);
+                  setSelectedGlobalInvoiceNumber(null);
+                }}
                 autoComplete="off"
                 placeholder="Match any column across all stock rows…"
                 className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
@@ -559,7 +637,10 @@ export function StockManager({
               {globalStockSearch.trim() ? (
                 <button
                   type="button"
-                  onClick={() => setGlobalStockSearch("")}
+                  onClick={() => {
+                    setGlobalStockSearch("");
+                    setSelectedGlobalInvoiceNumber(null);
+                  }}
                   className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
                 >
                   Clear
@@ -737,7 +818,7 @@ export function StockManager({
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
           {globalSearchLower.length > 0 ? (
             <>
-              Nothing in the stock table matches{" "}
+              No invoice details match{" "}
               <span className="font-medium">{globalStockSearch.trim()}</span>.
             </>
           ) : (
@@ -753,59 +834,18 @@ export function StockManager({
           {globalSearchLower.length > 0 ? (
             <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1 space-y-1">
-                <p className="text-sm font-medium text-[#245236]">All stock</p>
+                <p className="text-sm font-medium text-[#245236]">Related invoices</p>
                 <p className="text-xs text-[#245236]/75">
-                  {entrySearch.trim() ? (
-                    <>
-                      Showing <span className="tabular-nums">{filteredVisibleStock.length}</span> of{" "}
-                      <span className="tabular-nums">{stockScopeFiltered.length}</span> row
-                      {stockScopeFiltered.length === 1 ? "" : "s"} matching{" "}
-                      <span className="font-medium">“{globalStockSearch.trim()}”</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="tabular-nums">{filteredVisibleStock.length}</span>{" "}
-                      {filteredVisibleStock.length === 1 ? "row" : "rows"}{" "}
-                      {filteredVisibleStock.length === 1 ? "matches" : "match"}{" "}
-                      <span className="font-medium">“{globalStockSearch.trim()}”</span>
-                    </>
-                  )}
+                  <span className="tabular-nums">{globallyMatchedInvoices.length}</span>{" "}
+                  {globallyMatchedInvoices.length === 1 ? "invoice" : "invoices"}{" "}
+                  {globallyMatchedInvoices.length === 1 ? "matches" : "match"}{" "}
+                  <span className="font-medium">“{globalStockSearch.trim()}”</span>
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {canManage ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={toggleSelectAllVisible}
-                      disabled={visibleStockIds.length === 0}
-                      className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {allVisibleSelected ? "Clear selection" : "Select all"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={runDeleteSelected}
-                      disabled={
-                        selectedVisibleCount === 0 ||
-                        deletingMany ||
-                        deletingId != null ||
-                        duplicatingId != null
-                      }
-                      className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {deletingMany ? "Deleting..." : `Delete selected (${selectedVisibleCount})`}
-                    </button>
-                  </>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  disabled={filteredVisibleStock.length === 0}
-                  className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Export Excel
-                </button>
+                <p className="rounded-lg border border-[#245236]/25 bg-[#FEED01]/25 px-3 py-2 text-xs text-[#245236]/80">
+                  Showing invoice details instead of stock rows for this search.
+                </p>
               </div>
             </div>
           ) : (
@@ -896,6 +936,7 @@ export function StockManager({
             </div>
           )}
 
+          {globalSearchLower.length === 0 ? (
           <section className="rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm">
             <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
               {globalSearchLower.length > 0 ? "Filter results" : "Search displayed entries"}
@@ -920,7 +961,101 @@ export function StockManager({
               </div>
             </label>
           </section>
+          ) : null}
 
+          {globalSearchLower.length > 0 ? (
+            <section className="rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm">
+              <div className="grid gap-3 md:grid-cols-2">
+                {globallyMatchedInvoices.map((invoice) => (
+                  <button
+                    key={invoice.inventory_number}
+                    type="button"
+                    onClick={() => setSelectedGlobalInvoiceNumber(invoice.inventory_number)}
+                    className={`rounded-lg border p-4 text-left transition ${
+                      activeGlobalInvoiceNumber === invoice.inventory_number
+                        ? "border-[#245236]/45 bg-[#FEED01]/25 shadow-sm"
+                        : "border-[#245236]/15 bg-[#FEED01]/10 hover:border-[#245236]/30"
+                    }`}
+                  >
+                    <p className="text-sm font-semibold text-[#245236]">
+                      Inventory #{invoice.inventory_number}
+                    </p>
+                    <dl className="mt-2 grid grid-cols-1 gap-2 text-sm text-[#245236]/85">
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-[#245236]/65">Invoice number</dt>
+                        <dd>{invoice.invoice_number?.trim() || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-[#245236]/65">Invoice date</dt>
+                        <dd>{formatInvoiceDate(invoice.invoice_date)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-[#245236]/65">Invoice amount</dt>
+                        <dd>{formatMoney(invoice.invoice_amount)}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-[#245236]/65">Company</dt>
+                        <dd>{invoice.company_name?.trim() || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-[#245236]/65">Agent</dt>
+                        <dd>{invoice.agent_name?.trim() || "—"}</dd>
+                      </div>
+                    </dl>
+                  </button>
+                ))}
+              </div>
+              {activeGlobalInvoiceNumber ? (
+                <div className="mt-4 rounded-lg border border-[#245236]/20 bg-white p-4">
+                  <p className="text-sm font-medium text-[#245236]">
+                    Products for inventory #{activeGlobalInvoiceNumber}
+                  </p>
+                  {globalInvoiceRelatedStock.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#245236]/70">No stock products linked to this invoice.</p>
+                  ) : (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full min-w-[760px] text-left text-sm">
+                        <thead className="border-b border-[#245236]/20 bg-[#FEED01]/20 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
+                          <tr>
+                            <th className="px-3 py-2">Stock #</th>
+                            <th className="px-3 py-2">Barcode</th>
+                            <th className="px-3 py-2">Product</th>
+                            <th className="px-3 py-2">Brand</th>
+                            <th className="px-3 py-2">Style</th>
+                            <th className="px-3 py-2">Fabric</th>
+                            <th className="px-3 py-2">Size</th>
+                            <th className="px-3 py-2">Pieces</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#245236]/15">
+                          {globalInvoiceRelatedStock.map((row) => (
+                            <tr key={row.id}>
+                              <td className="px-3 py-2 font-medium text-[#245236]">{row.stock_number ?? "—"}</td>
+                              <td className="px-3 py-2 text-[#245236]/85">{row.barcode ?? "—"}</td>
+                              <td className="px-3 py-2 text-[#245236]/85">
+                                {productById.get(row.product ?? "")?.product_name?.trim() || productRowLabel(row)}
+                              </td>
+                              <td className="px-3 py-2 text-[#245236]/85">{brandLabel(row.brand_name)}</td>
+                              <td className="px-3 py-2 text-[#245236]/85">
+                                {styleById.get(row.style ?? "")?.style_name?.trim() || "—"}
+                              </td>
+                              <td className="px-3 py-2 text-[#245236]/85">
+                                {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
+                              </td>
+                              <td className="px-3 py-2 text-[#245236]/85">
+                                {sizeById.get(row.size ?? "")?.size?.trim() || row.size || "—"}
+                              </td>
+                              <td className="px-3 py-2 text-[#245236]/85">{row.pieces ?? "—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </section>
+          ) : (
           <div className="overflow-hidden rounded-xl border border-[#245236]/20 bg-white shadow-sm">
             {filteredVisibleStock.length === 0 ? (
               <p className="p-8 text-center text-sm text-zinc-500">
@@ -1238,6 +1373,7 @@ export function StockManager({
               </>
             )}
           </div>
+          )}
         </div>
       )}
     </div>

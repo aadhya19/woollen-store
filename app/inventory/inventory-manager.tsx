@@ -8,6 +8,7 @@ import Modal from "@/app/components/Modal";
 import { downloadWorkbookAsXlsx } from "@/lib/download-xlsx";
 import type {
   AgentLookupRow,
+  InventoryExportItemRow,
   InventoryRow,
   TransportLookupRow,
   UserLookupRow,
@@ -18,6 +19,7 @@ type Props = {
   agents: AgentLookupRow[];
   transports: TransportLookupRow[];
   users: UserLookupRow[];
+  inventoryExportItems: InventoryExportItemRow[];
   canManage: boolean;
   /** Employee: can edit existing rows but only fields that are still empty (server enforces). */
   allowRestrictedEdit?: boolean;
@@ -95,6 +97,7 @@ export function InventoryManager({
   agents,
   transports,
   users,
+  inventoryExportItems,
   canManage,
   allowRestrictedEdit = false,
 }: Props) {
@@ -262,64 +265,21 @@ export function InventoryManager({
   function handleExportExcel() {
     if (filteredByAdminControls.length === 0) return;
 
-    const columns = [
-      "Id",
-      "Inventory number",
-      "Company name",
-      "Agent name",
-      "Transport name",
-      "Waybill number",
-      "Transport charges",
-      "Date of entry",
-      "Loading charges",
-      "Staff name",
-      "Location",
-      "Invoice number",
-      "Number of parcels",
-      "Billed quantity",
-      "Received quantity",
-      "Tallying",
-      "Pricing",
-      "Stickering",
-      "Supply",
-      "Invoice amount",
-      "Invoice date",
-      "Invoice image URL",
-      "Product image URL",
-      "Payment details",
-      "Payment mode",
-      "Payment status",
-      "Debit note",
-    ];
-
-    const dataRows = filteredByAdminControls.map((row) => [
-      row.id,
-      row.inventory_number,
-      row.company_name,
-      row.agent_name,
-      row.transport_name,
-      row.waybill_number,
-      row.transport_charges,
-      row.date_of_entry,
-      row.loading_charges,
-      row.staff_name,
-      row.location,
-      row.invoice_number,
-      row.number_of_parcels,
-      row.billed_quantity,
-      row.received_quantity,
-      row.tallying,
-      row.pricing,
-      row.stickering,
-      row.supply,
-      row.invoice_amount,
-      row.invoice_date,
-      row.invoice_image_url,
-      row.product_image,
-      row.payment_details,
-      row.payment_mode,
-      row.payment_status,
-      row.debit_note,
+    const columns = ["Item Category", "Item Description", "Company", "Item Code"];
+    const allowedInventoryNumbers = new Set(
+      filteredByAdminControls
+        .map((row) => row.inventory_number?.trim())
+        .filter((v): v is string => Boolean(v)),
+    );
+    const exportRows = inventoryExportItems.filter((row) => {
+      const inventoryNumber = row.inventory_number?.trim();
+      return Boolean(inventoryNumber && allowedInventoryNumbers.has(inventoryNumber));
+    });
+    const dataRows = exportRows.map((row) => [
+      row.item_category ?? "—",
+      row.item_description ?? "—",
+      row.company ?? "—",
+      row.item_code ?? "—",
     ]);
 
     const fileName = `inventory-export-${new Date().toISOString().slice(0, 10)}.xlsx`;

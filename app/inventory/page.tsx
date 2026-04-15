@@ -4,6 +4,7 @@ import PageHeader from "@/app/components/PageHeader";
 import { InventoryManager } from "./inventory-manager";
 import type {
   AgentLookupRow,
+  InventoryExportItemRow,
   TransportLookupRow,
   UserLookupRow,
   InventoryRow,
@@ -21,7 +22,7 @@ export default async function InventoryPage() {
     )
     .order("created_at", { ascending: false });
 
-  const [inventoriesRes, agentsRes, transportsRes, usersRes] = await Promise.all([
+  const [inventoriesRes, agentsRes, transportsRes, usersRes, stockRes, productsRes] = await Promise.all([
     inventoriesQuery,
     supabase
       .from("Agent")
@@ -35,13 +36,40 @@ export default async function InventoryPage() {
       .from("Users")
       .select("id, name")
       .order("name", { ascending: true }),
+    supabase
+      .from("Stock")
+      .select("inventory_number, stock_number, brand_name, product"),
+    supabase
+      .from("Products")
+      .select("id, product_name"),
   ]);
 
   const error =
     inventoriesRes.error ??
     agentsRes.error ??
     transportsRes.error ??
-    usersRes.error;
+    usersRes.error ??
+    stockRes.error ??
+    productsRes.error;
+
+  const productNameById = new Map<string, string>();
+  for (const row of productsRes.data ?? []) {
+    const id = row.id?.toString().trim();
+    if (!id) continue;
+    productNameById.set(id, row.product_name?.toString().trim() || id);
+  }
+
+  const inventoryExportItems: InventoryExportItemRow[] = (stockRes.data ?? []).map((row) => {
+    const productId = row.product?.toString().trim() || "";
+    const productName = productId ? (productNameById.get(productId) ?? productId) : null;
+    return {
+      inventory_number: row.inventory_number?.toString().trim() || null,
+      item_category: productName,
+      item_description: productName,
+      company: row.brand_name?.toString().trim() || null,
+      item_code: row.stock_number?.toString().trim() || null,
+    };
+  });
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -61,6 +89,7 @@ export default async function InventoryPage() {
           agents={(agentsRes.data ?? []) as AgentLookupRow[]}
           transports={(transportsRes.data ?? []) as TransportLookupRow[]}
           users={(usersRes.data ?? []) as UserLookupRow[]}
+          inventoryExportItems={inventoryExportItems}
           canManage={session.role === "admin"}
           allowRestrictedEdit={session.role === "user"}
         />
