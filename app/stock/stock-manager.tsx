@@ -180,12 +180,8 @@ export function StockManager({
   }, [inventoryForStock, searchPrefixLower]);
 
   const selectedInventory = useMemo(() => {
-    if (matchingInventories.length === 0) return null;
-    if (!activeInventoryNumber) return matchingInventories[0];
-    return (
-      matchingInventories.find((r) => r.inventory_number === activeInventoryNumber) ??
-      matchingInventories[0]
-    );
+    if (matchingInventories.length === 0 || !activeInventoryNumber) return null;
+    return matchingInventories.find((r) => r.inventory_number === activeInventoryNumber) ?? null;
   }, [matchingInventories, activeInventoryNumber]);
 
   const globalSearchLower = globalStockSearch.trim().toLowerCase();
@@ -254,6 +250,12 @@ export function StockManager({
       );
     }
     if (!searchPrefixLower) return [];
+    if (matchingInventories.length > 0) {
+      if (!activeInventoryNumber) return [];
+      return stock.filter(
+        (row) => (row.inventory_number?.trim() ?? "") === activeInventoryNumber,
+      );
+    }
     return stock.filter((row) =>
       (row.inventory_number?.trim().toLowerCase() ?? "").includes(searchPrefixLower),
     );
@@ -261,6 +263,8 @@ export function StockManager({
     stock,
     globalSearchLower,
     searchPrefixLower,
+    matchingInventories.length,
+    activeInventoryNumber,
     productById,
     productRowLabel,
     brandLabel,
@@ -378,6 +382,13 @@ export function StockManager({
       return next;
     });
   }, [visibleStockIdSet]);
+
+  useEffect(() => {
+    if (!activeInventoryNumber) return;
+    if (!matchingInventories.some((m) => m.inventory_number === activeInventoryNumber)) {
+      setActiveInventoryNumber(null);
+    }
+  }, [matchingInventories, activeInventoryNumber]);
 
   function closeCreateModal() {
     setIsCreateOpen(false);
@@ -567,15 +578,7 @@ export function StockManager({
     setEntrySearch("");
     const prefix = inventorySearch.trim();
     setSearchedInventoryNumber(prefix);
-    if (!prefix) {
-      setActiveInventoryNumber(null);
-      return;
-    }
-    const prefixLower = prefix.toLowerCase();
-    const matches = inventoryForStock
-      .filter((row) => row.inventory_number.trim().toLowerCase().includes(prefixLower))
-      .sort((a, b) => a.inventory_number.localeCompare(b.inventory_number));
-    setActiveInventoryNumber(matches[0]?.inventory_number ?? null);
+    setActiveInventoryNumber(null);
   }
 
   return (
@@ -863,10 +866,14 @@ export function StockManager({
                   <label className="flex max-w-md flex-col gap-1 text-xs font-medium text-[#245236]/80">
                     Inventory number (choose row for details and Add new)
                     <select
-                      value={activeInventoryNumber ?? matchingInventories[0]?.inventory_number ?? ""}
-                      onChange={(e) => setActiveInventoryNumber(e.target.value)}
+                      value={activeInventoryNumber ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setActiveInventoryNumber(v.trim() ? v : null);
+                      }}
                       className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
                     >
+                      <option value="">Select an inventory…</option>
                       {matchingInventories.map((m) => (
                         <option key={m.inventory_number} value={m.inventory_number}>
                           {m.inventory_number}
@@ -875,12 +882,30 @@ export function StockManager({
                     </select>
                   </label>
                 ) : matchingInventories.length === 1 ? (
-                  <p className="text-xs text-[#245236]/80">
-                    Inventory <span className="font-medium tabular-nums">{matchingInventories[0].inventory_number}</span>
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-[#245236]/80">
+                      One inventory matches:{" "}
+                      <span className="font-medium tabular-nums">{matchingInventories[0].inventory_number}</span>
+                    </p>
+                    {!activeInventoryNumber ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setActiveInventoryNumber(matchingInventories[0].inventory_number)
+                        }
+                        className="inline-flex h-[36px] items-center justify-center rounded-lg border border-[#245236]/30 bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
+                      >
+                        Load stock entries
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
                 {selectedInventory ? (
                   <InventoryContextReadonly context={selectedInventory} />
+                ) : matchingInventories.length > 0 ? (
+                  <p className="rounded-lg border border-[#245236]/20 bg-[#FEED01]/20 px-3 py-2 text-xs text-[#245236]/85">
+                    Select an inventory above to see invoice details and load its stock rows in the table below.
+                  </p>
                 ) : (
                   <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
                     No inventory master row starts with this prefix; stock rows below still match your search.
@@ -936,32 +961,7 @@ export function StockManager({
             </div>
           )}
 
-          {globalSearchLower.length === 0 ? (
-          <section className="rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm">
-            <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
-              {globalSearchLower.length > 0 ? "Filter results" : "Search displayed entries"}
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <input
-                  type="search"
-                  value={entrySearch}
-                  onChange={(e) => setEntrySearch(e.target.value)}
-                  autoComplete="off"
-                  placeholder="Search stock #, barcode, product, brand, style, fabric, size, pricing..."
-                  className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
-                />
-                {entrySearch.trim() ? (
-                  <button
-                    type="button"
-                    onClick={() => setEntrySearch("")}
-                    className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
-                  >
-                    Clear
-                  </button>
-                ) : null}
-              </div>
-            </label>
-          </section>
-          ) : null}
+         
 
           {globalSearchLower.length > 0 ? (
             <section className="rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm">
@@ -1063,9 +1063,11 @@ export function StockManager({
                   ? `No rows match "${entrySearch.trim()}". Try a shorter or different term.`
                   : globalSearchLower.length > 0
                     ? `No rows match "${globalStockSearch.trim()}" in the full table.`
-                    : selectedInventory
-                      ? `No stock rows for inventory ${selectedInventory.inventory_number} yet.`
-                      : "No stock rows start with this prefix yet."}
+                    : matchingInventories.length > 0 && !activeInventoryNumber
+                      ? "Select an inventory number above to load its stock entries."
+                      : selectedInventory
+                        ? `No stock rows for inventory ${selectedInventory.inventory_number} yet.`
+                        : "No stock rows start with this prefix yet."}
               </p>
             ) : (
               <>

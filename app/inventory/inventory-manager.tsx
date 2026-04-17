@@ -102,6 +102,8 @@ export function InventoryManager({
   allowRestrictedEdit = false,
 }: Props) {
   const router = useRouter();
+  const isEmployee = !canManage && allowRestrictedEdit;
+  console.log("isEmployee", isEmployee);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -804,10 +806,10 @@ export function InventoryManager({
                           {row.invoice_date ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {linkCellButton(row.invoice_image_url)}
+                          {linkCellButton(row.invoice_image_url, isEmployee)}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {linkCellButton(row.product_image)}
+                          {linkCellButton(row.product_image, isEmployee)}
                         </td>
                         {canManage ? (
                           <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
@@ -825,7 +827,7 @@ export function InventoryManager({
                           </td>
                         ) : null}
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {linkCellButton(row.debit_note)}
+                          {linkCellButton(row.debit_note, isEmployee)}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
                           {formatDate(row.created_at)}
@@ -1232,14 +1234,18 @@ function InventoryFormFields({
         {v?.invoice_image_url ? (
           <span className="font-normal text-[#245236]/70">
             Current:{" "}
-            <a
-              href={v.invoice_image_url}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-[#245236] underline-offset-2 hover:underline"
-            >
-              open link
-            </a>
+            {!restrictEditToEmptyFields ? (
+              <a
+                href={v.invoice_image_url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-[#245236] underline-offset-2 hover:underline"
+              >
+                open link
+              </a>
+            ) : (
+              <span className="font-medium text-[#245236]/50">file uploaded</span>
+            )}
             {ro && invHasStr(v.invoice_image_url)
               ? null
               : " — choose a file below to replace."}
@@ -1260,14 +1266,18 @@ function InventoryFormFields({
         {v?.product_image ? (
           <span className="font-normal text-[#245236]/70">
             Current:{" "}
-            <a
-              href={v.product_image}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-[#245236] underline-offset-2 hover:underline"
-            >
-              open link
-            </a>
+            {!restrictEditToEmptyFields ? (
+              <a
+                href={v.product_image}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-[#245236] underline-offset-2 hover:underline"
+              >
+                open link
+              </a>
+            ) : (
+              <span className="font-medium text-[#245236]/50">file uploaded</span>
+            )}
             {ro && invHasStr(v.product_image)
               ? null
               : " — choose a file below to replace."}
@@ -1349,14 +1359,18 @@ function InventoryFormFields({
         {v?.debit_note ? (
           <span className="font-normal text-[#245236]/70">
             Current:{" "}
-            <a
-              href={v.debit_note}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-[#245236] underline-offset-2 hover:underline"
-            >
-              open link
-            </a>
+            {!restrictEditToEmptyFields ? (
+              <a
+                href={v.debit_note}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-[#245236] underline-offset-2 hover:underline"
+              >
+                open link
+              </a>
+            ) : (
+              <span className="font-medium text-[#245236]/50">file uploaded</span>
+            )}
             {ro && invHasStr(v.debit_note)
               ? null
               : " — choose a file below to replace."}
@@ -1518,9 +1532,12 @@ function previewText(s: string | null | undefined, max = 48) {
   return t.length <= max ? t : `${t.slice(0, max)}…`;
 }
 
-function linkCellButton(url: string | null | undefined) {
+function linkCellButton(url: string | null | undefined, canOpen: boolean) {
   const href = url?.trim();
   if (!href) return "—";
+
+  if( !canOpen)
+  {
   return (
     <a
       href={href}
@@ -1531,4 +1548,11 @@ function linkCellButton(url: string | null | undefined) {
       Open
     </a>
   );
+}
+else
+{
+  return (
+    <span className="font-medium text-[#245236]/50">file uploaded</span>
+  );
+}
 }
