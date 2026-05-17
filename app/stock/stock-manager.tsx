@@ -535,6 +535,7 @@ export function StockManager({
       "HSN Code",
       "GST Group",
       "Cost Price",
+      "Selling Price",
       "Retail Price",
       "ITEM CODE",
     ];
@@ -557,6 +558,7 @@ export function StockManager({
         row.HSN_code,
         row.GST_group,
         row.cost_price,
+        row.selling_price,
         row.mrp,
         row.stock_number,
       ];
