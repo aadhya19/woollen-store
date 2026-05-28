@@ -683,3 +683,36 @@ export async function updateInventory(
   return { error: null };
 }
 
+type WorkflowStatusField = "tallying" | "pricing" | "stickering" | "supply";
+
+export async function updateInventoryWorkflowStatus(input: {
+  id: string;
+  field: WorkflowStatusField;
+  value: string | null;
+}): Promise<ActionResult> {
+  const authError = await requireActionRole(["admin", "user"]);
+  if (authError) return { error: authError };
+
+  const id = input.id?.toString().trim();
+  if (!id) return { error: "Missing inventory id" };
+
+  const allowedFields: WorkflowStatusField[] = ["tallying", "pricing", "stickering", "supply"];
+  if (!allowedFields.includes(input.field)) {
+    return { error: "Invalid status field" };
+  }
+
+  const value = input.value?.toString().trim() || null;
+  const supabase = createSupabase();
+  const { error } = await supabase
+    .from("Inventory")
+    .update({
+      [input.field]: value,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) return { error: mapSupabaseError(error.message) };
+  revalidatePath("/inventory");
+  return { error: null };
+}
+

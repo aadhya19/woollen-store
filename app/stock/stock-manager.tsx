@@ -79,7 +79,6 @@ function buildCreateStockSummary(
     { label: "Product", value: productName },
     { label: "Style", value: styleName },
     { label: "Fabric", value: fabricName },
-    { label: "Stock number", value: emptyToDash(fd.get("stock_number")) },
     { label: "Barcode", value: emptyToDash(fd.get("barcode")) },
     { label: "Inventory number", value: emptyToDash(fd.get("inventory_number")) },
     { label: "Size", value: sizeLabel },
@@ -757,11 +756,7 @@ export function StockManager({
           setRowError(null);
         }}
         title="Edit stock item"
-        description={
-          editingRow?.stock_number?.trim()
-            ? `Update stock row ${editingRow.stock_number}.`
-            : "Update this stock row."
-        }
+        description="Update this stock row."
         panelClassName="max-w-[1100px]"
       >
         {rowError ? (
@@ -1007,55 +1002,6 @@ export function StockManager({
                   </button>
                 ))}
               </div>
-              {activeGlobalInvoiceNumber ? (
-                <div className="mt-4 rounded-lg border border-[#245236]/20 bg-white p-4">
-                  <p className="text-sm font-medium text-[#245236]">
-                    Products for inventory #{activeGlobalInvoiceNumber}
-                  </p>
-                  {globalInvoiceRelatedStock.length === 0 ? (
-                    <p className="mt-2 text-sm text-[#245236]/70">No stock products linked to this invoice.</p>
-                  ) : (
-                    <div className="mt-3 overflow-x-auto">
-                      <table className="w-full min-w-[760px] text-left text-sm">
-                        <thead className="border-b border-[#245236]/20 bg-[#FEED01]/20 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
-                          <tr>
-                            <th className="px-3 py-2">Stock #</th>
-                            <th className="px-3 py-2">Barcode</th>
-                            <th className="px-3 py-2">Product</th>
-                            <th className="px-3 py-2">Brand</th>
-                            <th className="px-3 py-2">Style</th>
-                            <th className="px-3 py-2">Fabric</th>
-                            <th className="px-3 py-2">Size</th>
-                            <th className="px-3 py-2">Pieces</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#245236]/15">
-                          {globalInvoiceRelatedStock.map((row) => (
-                            <tr key={row.id}>
-                              <td className="px-3 py-2 font-medium text-[#245236]">{row.stock_number ?? "—"}</td>
-                              <td className="px-3 py-2 text-[#245236]/85">{row.barcode ?? "—"}</td>
-                              <td className="px-3 py-2 text-[#245236]/85">
-                                {productById.get(row.product ?? "")?.product_name?.trim() || productRowLabel(row)}
-                              </td>
-                              <td className="px-3 py-2 text-[#245236]/85">{brandLabel(row.brand_name)}</td>
-                              <td className="px-3 py-2 text-[#245236]/85">
-                                {styleById.get(row.style ?? "")?.style_name?.trim() || "—"}
-                              </td>
-                              <td className="px-3 py-2 text-[#245236]/85">
-                                {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
-                              </td>
-                              <td className="px-3 py-2 text-[#245236]/85">
-                                {sizeById.get(row.size ?? "")?.size?.trim() || row.size || "—"}
-                              </td>
-                              <td className="px-3 py-2 text-[#245236]/85">{row.pieces ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              ) : null}
             </section>
           ) : (
           <div className="overflow-hidden rounded-xl border border-[#245236]/20 bg-white shadow-sm">
@@ -1089,12 +1035,6 @@ export function StockManager({
                         </label>
                       ) : null}
                       <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
-                        <div>
-                          <p className="text-xs text-[#245236]/70">Stock #</p>
-                          <p className="text-sm font-semibold text-[#245236]">
-                            {row.stock_number ?? "—"}
-                          </p>
-                        </div>
                         <div>
                           <p className="text-xs text-[#245236]/70">Barcode</p>
                           <StockBarcodeCell barcode={row.barcode} />
@@ -1131,22 +1071,21 @@ export function StockManager({
                             {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
                           </p>
                         </div>
-                        <div className="col-span-2">
-                          <p className="text-xs text-[#245236]/70">Pricing</p>
-                          <p className="text-[#245236]/85">
-                            C: {formatNumber(row.cost_price)} / S:{" "}
-                            {formatNumber(row.selling_price)} / M: {formatNumber(row.mrp)}
-                          </p>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">Quantity</p>
+                          <p className="text-[#245236]/85">{formatNumber(row.pieces)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-[#245236]/70">Created</p>
-                          <p className="text-[#245236]/85">{formatDate(row.created_at)}</p>
+                          <p className="text-xs text-[#245236]/70">Cost</p>
+                          <p className="text-[#245236]/85">{formatNumber(row.cost_price)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-[#245236]/70">Updated</p>
-                          <p className="text-[#245236]/85">
-                            {row.updated_at ? formatDate(row.updated_at) : "—"}
-                          </p>
+                          <p className="text-xs text-[#245236]/70">Selling</p>
+                          <p className="text-[#245236]/85">{formatNumber(row.selling_price)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-[#245236]/70">MRP</p>
+                          <p className="text-[#245236]/85">{formatNumber(row.mrp)}</p>
                         </div>
                       </div>
 
@@ -1220,16 +1159,16 @@ export function StockManager({
                           />
                         </th>
                       ) : null}
-                      <th className="px-4 py-3">Stock #</th>
                       <th className="px-4 py-3">Barcode</th>
                       <th className="px-4 py-3">Inventory #</th>
                       <th className="px-4 py-3">Product</th>
                       <th className="px-4 py-3">Brand</th>
                       <th className="px-4 py-3">Style</th>
                       <th className="px-4 py-3">Fabric</th>
-                      <th className="px-4 py-3">Pricing</th>
-                      <th className="px-4 py-3">Created</th>
-                      <th className="px-4 py-3">Updated</th>
+                      <th className="px-4 py-3">Quantity</th>
+                      <th className="px-4 py-3">Cost</th>
+                      <th className="px-4 py-3">Selling</th>
+                      <th className="px-4 py-3">MRP</th>
                       <th className="px-4 py-3 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -1247,14 +1186,11 @@ export function StockManager({
                                 checked={selectedStockIds.includes(row.id)}
                                 onChange={() => toggleSelectStock(row.id)}
                                 disabled={deletingMany || deletingId != null || duplicatingId != null}
-                                aria-label={`Select stock row ${row.stock_number ?? row.id}`}
+                                aria-label={`Select stock row ${row.id}`}
                                 className="h-4 w-4 rounded border-[#245236]/40 text-[#245236] focus:ring-[#245236]/30"
                               />
                             </td>
                           ) : null}
-                          <td className="px-4 py-3 font-medium text-[#245236]">
-                            {row.stock_number ?? "—"}
-                          </td>
                           <td className="px-4 py-3">
                             <StockBarcodeCell barcode={row.barcode} table />
                           </td>
@@ -1274,16 +1210,12 @@ export function StockManager({
                           <td className="px-4 py-3 text-[#245236]/80">
                             {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
                           </td>
+                          <td className="px-4 py-3 text-[#245236]/80">{formatNumber(row.pieces)}</td>
+                          <td className="px-4 py-3 text-[#245236]/80">{formatNumber(row.cost_price)}</td>
                           <td className="px-4 py-3 text-[#245236]/80">
-                            C: {formatNumber(row.cost_price)} / S:{" "}
-                            {formatNumber(row.selling_price)} / M: {formatNumber(row.mrp)}
+                            {formatNumber(row.selling_price)}
                           </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                            {formatDate(row.created_at)}
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                            {row.updated_at ? formatDate(row.updated_at) : "—"}
-                          </td>
+                          <td className="px-4 py-3 text-[#245236]/80">{formatNumber(row.mrp)}</td>
                           <td className="whitespace-nowrap px-4 py-3 text-right">
                             {canManage || allowRestrictedEdit ? (
                               <div className="flex justify-end gap-2">
@@ -1380,6 +1312,213 @@ export function StockManager({
           )}
         </div>
       )}
+      <Modal
+        open={Boolean(activeGlobalInvoiceNumber)}
+        onClose={() => setSelectedGlobalInvoiceNumber(null)}
+        title={
+          activeGlobalInvoiceNumber
+            ? `Products for inventory #${activeGlobalInvoiceNumber}`
+            : "Products"
+        }
+        description="Invoice-linked stock details"
+        panelClassName="max-w-6xl"
+      >
+        <div className="space-y-3">
+          {globalInvoiceRelatedStock.length === 0 ? (
+            <p className="text-sm text-[#245236]/70">No stock products linked to this invoice.</p>
+          ) : (
+            <>
+              <div className="divide-y divide-[#245236]/15 md:hidden">
+                {globalInvoiceRelatedStock.map((row) => (
+                  <article key={row.id} className="space-y-2 py-2">
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Barcode</p>
+                        <p className="text-[#245236]/85">{row.barcode ?? "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Product</p>
+                        <p className="text-[#245236]/85">
+                          {productById.get(row.product ?? "")?.product_name?.trim() ||
+                            productRowLabel(row)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Brand</p>
+                        <p className="text-[#245236]/85">{brandLabel(row.brand_name)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Style</p>
+                        <p className="text-[#245236]/85">
+                          {styleById.get(row.style ?? "")?.style_name?.trim() || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Fabric</p>
+                        <p className="text-[#245236]/85">
+                          {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Quantity</p>
+                        <p className="text-[#245236]/85">{formatNumber(row.pieces)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Cost</p>
+                        <p className="text-[#245236]/85">{formatNumber(row.cost_price)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">Selling</p>
+                        <p className="text-[#245236]/85">{formatNumber(row.selling_price)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#245236]/70">MRP</p>
+                        <p className="text-[#245236]/85">{formatNumber(row.mrp)}</p>
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 pt-1">
+                      {canManage || allowRestrictedEdit ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRowError(null);
+                              setSelectedGlobalInvoiceNumber(null);
+                              setEditingId(row.id);
+                            }}
+                            disabled={duplicatingId != null}
+                            className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => runDuplicate(row.id)}
+                            disabled={
+                              deletingMany ||
+                              deletingId != null ||
+                              duplicatingId != null
+                            }
+                            className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
+                          </button>
+                          {canManage ? (
+                            <button
+                              type="button"
+                              onClick={() => runDelete(row.id)}
+                              disabled={
+                                deletingMany ||
+                                deletingId === row.id ||
+                                duplicatingId != null
+                              }
+                              className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
+                            >
+                              {deletingId === row.id ? "Deleting..." : "Delete"}
+                            </button>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="text-xs text-[#245236]/70">View only</span>
+                      )}
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full min-w-[760px] text-left text-sm">
+                  <thead className="border-b border-[#245236]/20 bg-[#FEED01]/20 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
+                    <tr>
+                      <th className="px-3 py-2">Barcode</th>
+                      <th className="px-3 py-2">Product</th>
+                      <th className="px-3 py-2">Brand</th>
+                      <th className="px-3 py-2">Style</th>
+                      <th className="px-3 py-2">Fabric</th>
+                      <th className="px-3 py-2">Quantity</th>
+                      <th className="px-3 py-2">Cost</th>
+                      <th className="px-3 py-2">Selling</th>
+                      <th className="px-3 py-2">MRP</th>
+                      <th className="px-3 py-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#245236]/15">
+                    {globalInvoiceRelatedStock.map((row) => (
+                      <tr key={row.id}>
+                        <td className="px-3 py-2 text-[#245236]/85">{row.barcode ?? "—"}</td>
+                        <td className="px-3 py-2 text-[#245236]/85">
+                          {productById.get(row.product ?? "")?.product_name?.trim() ||
+                            productRowLabel(row)}
+                        </td>
+                        <td className="px-3 py-2 text-[#245236]/85">{brandLabel(row.brand_name)}</td>
+                        <td className="px-3 py-2 text-[#245236]/85">
+                          {styleById.get(row.style ?? "")?.style_name?.trim() || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-[#245236]/85">
+                          {fabricById.get(row.Fabric ?? "")?.fabric_name?.trim() || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-[#245236]/85">{formatNumber(row.pieces)}</td>
+                        <td className="px-3 py-2 text-[#245236]/85">
+                          {formatNumber(row.cost_price)}
+                        </td>
+                        <td className="px-3 py-2 text-[#245236]/85">
+                          {formatNumber(row.selling_price)}
+                        </td>
+                        <td className="px-3 py-2 text-[#245236]/85">{formatNumber(row.mrp)}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-right">
+                          {canManage || allowRestrictedEdit ? (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setRowError(null);
+                                  setSelectedGlobalInvoiceNumber(null);
+                                  setEditingId(row.id);
+                                }}
+                                disabled={duplicatingId != null}
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => runDuplicate(row.id)}
+                                disabled={
+                                  deletingMany ||
+                                  deletingId != null ||
+                                  duplicatingId != null
+                                }
+                                className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {duplicatingId === row.id ? "Duplicating..." : "Duplicate"}
+                              </button>
+                              {canManage ? (
+                                <button
+                                  type="button"
+                                  onClick={() => runDelete(row.id)}
+                                  disabled={
+                                    deletingMany ||
+                                    deletingId === row.id ||
+                                    duplicatingId != null
+                                  }
+                                  className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline"
+                                >
+                                  {deletingId === row.id ? "Deleting..." : "Delete"}
+                                </button>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-[#245236]/70">View only</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -1566,13 +1705,6 @@ function StockFormFields({
         {inventoryLocked ? (
           <input type="hidden" name="inventory_number" value={lockedInventoryNumber!} />
         ) : null}
-        <FormInput
-          name="stock_number"
-          label="Stock number"
-          value={v?.stock_number}
-          placeholder="STK-001"
-          readOnly={ro && stkHasStr(v?.stock_number)}
-        />
         {mode === "create" && prefillBarcode != null ? (
           <FormInput
             name="barcode"
@@ -1797,8 +1929,6 @@ function StockFormFields({
 
       {mode === "edit" && v ? (
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <ReadonlyFormField label="Created at" value={formatDate(v.created_at)} />
-          <ReadonlyFormField label="Updated at" value={v.updated_at ? formatDate(v.updated_at) : "—"} />
           <ReadonlyFormField label="Stock row id" value={v.id} />
         </div>
       ) : null}

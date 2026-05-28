@@ -13,6 +13,7 @@ export type UserRow = {
   username: string | null;
   password: string | null;
   role: string | null;
+  status: "active" | "inactive" | string | null;
   created_at: string;
   updated_at: string | null;
 };

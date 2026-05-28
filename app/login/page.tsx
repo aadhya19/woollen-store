@@ -15,6 +15,7 @@ export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
   const hasError = params.error === "invalid";
   const hasRoleError = params.error === "role";
+  const hasInactiveError = params.error === "inactive";
 
   return (
     <div className="min-h-full bg-[#fffef2] px-4 py-10 font-sans text-[#245236]">
@@ -41,6 +42,15 @@ export default async function LoginPage({ searchParams }: Props) {
             This account does not have a valid role. Use <code>admin</code>,{" "}
             <code>user</code>, or <code>employee</code> in the linked Roles
             table.
+          </p>
+        ) : null}
+
+        {hasInactiveError ? (
+          <p
+            role="alert"
+            className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+          >
+            This account is inactive. Please contact admin.
           </p>
         ) : null}
 

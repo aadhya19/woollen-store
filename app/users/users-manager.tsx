@@ -125,6 +125,7 @@ export function UsersManager({ users, roles }: Props) {
               defaultRoleId=""
               className="min-w-[180px]"
             />
+            <StatusSelect name="status" defaultStatus="active" className="min-w-[150px]" />
             <SubmitButton className="h-[38px] rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60">
               Create
             </SubmitButton>
@@ -156,8 +157,7 @@ export function UsersManager({ users, roles }: Props) {
                   <th className="px-4 py-3">Username</th>
                   <th className="px-4 py-3">Password</th>
                   <th className="px-4 py-3">Role</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3">Updated</th>
+                  <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -168,7 +168,7 @@ export function UsersManager({ users, roles }: Props) {
                     className="hover:bg-[#FEED01]/20"
                   >
                     {editingId === row.id ? (
-                      <td colSpan={7} className="px-4 py-3">
+                      <td colSpan={6} className="px-4 py-3">
                         <form
                           action={runUpdate}
                           className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end"
@@ -207,6 +207,11 @@ export function UsersManager({ users, roles }: Props) {
                             defaultRoleId={row.role ?? ""}
                             className="min-w-[180px]"
                           />
+                          <StatusSelect
+                            name="status"
+                            defaultStatus={normalizeStatus(row.status)}
+                            className="min-w-[150px]"
+                          />
                           <div className="flex gap-2">
                             <SubmitButton className="h-[38px] rounded-lg bg-[#245236] px-3 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-60">
                               Save
@@ -240,11 +245,16 @@ export function UsersManager({ users, roles }: Props) {
                             {roleLabel(row.role)}
                           </span>
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                          {formatDate(row.created_at)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                          {row.updated_at ? formatDate(row.updated_at) : "—"}
+                        <td className="px-4 py-3 text-[#245236]/80">
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                              normalizeStatus(row.status) === "active"
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-zinc-200 text-zinc-700"
+                            }`}
+                          >
+                            {normalizeStatus(row.status)}
+                          </span>
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right">
                           <button
@@ -303,6 +313,37 @@ function RoleSelect({
   );
 }
 
+function normalizeStatus(status: string | null | undefined): "active" | "inactive" {
+  const s = status?.trim().toLowerCase();
+  return s === "inactive" ? "inactive" : "active";
+}
+
+function StatusSelect({
+  name,
+  defaultStatus,
+  className,
+}: {
+  name: string;
+  defaultStatus: "active" | "inactive";
+  className?: string;
+}) {
+  return (
+    <label
+      className={`flex flex-col gap-1 text-xs font-medium text-[#245236]/80 ${className ?? ""}`}
+    >
+      Status
+      <select
+        name={name}
+        defaultValue={defaultStatus}
+        className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+      >
+        <option value="active">active</option>
+        <option value="inactive">inactive</option>
+      </select>
+    </label>
+  );
+}
+
 function SubmitButton({
   children,
   className,
@@ -320,13 +361,3 @@ function SubmitButton({
   );
 }
 
-function formatDate(iso: string) {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}

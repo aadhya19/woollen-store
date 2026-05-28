@@ -13,7 +13,7 @@ export default async function UsersPage() {
   const [usersRes, rolesRes] = await Promise.all([
     supabase
       .from("Users")
-      .select("id, name, username, password, role, created_at, updated_at")
+      .select("id, name, username, password, role, status")
       .order("created_at", { ascending: false }),
     supabase
       .from("Roles")

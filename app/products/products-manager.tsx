@@ -95,20 +95,18 @@ export function ProductsManager({ products }: Props) {
           <p className="p-8 text-center text-sm text-zinc-500">No products yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[600px] text-left text-sm">
+            <table className="w-full w-[420px] table-auto text-left text-sm">
               <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                 <tr>
                   <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3">Updated</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="w-[110px] px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#245236]/15">
                 {products.map((row) => (
                   <tr key={row.id} className="hover:bg-[#FEED01]/20">
                     {editingId === row.id ? (
-                      <td colSpan={4} className="px-4 py-3">
+                      <td colSpan={2} className="px-4 py-3">
                         <form action={runUpdate} className="space-y-3">
                           <input type="hidden" name="id" value={row.id} />
                           <ProductFormFields mode="edit" values={row} />
@@ -136,12 +134,6 @@ export function ProductsManager({ products }: Props) {
                       <>
                         <td className="px-4 py-3 font-medium text-[#245236]">
                           {row.product_name ?? "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                          {formatDate(row.created_at)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                          {row.updated_at ? formatDate(row.updated_at) : "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right">
                           <button
@@ -221,13 +213,3 @@ function ProductFormFields({
   );
 }
 
-function formatDate(iso: string) {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}

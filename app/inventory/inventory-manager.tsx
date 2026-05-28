@@ -2,8 +2,13 @@
 
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { createInventory, deleteInventory, updateInventory } from "./actions";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  createInventory,
+  deleteInventory,
+  updateInventory,
+  updateInventoryWorkflowStatus,
+} from "./actions";
 import Modal from "@/app/components/Modal";
 import { downloadWorkbookAsXlsx } from "@/lib/download-xlsx";
 import type {
@@ -24,6 +29,8 @@ type Props = {
   /** Employee: can edit existing rows but only fields that are still empty (server enforces). */
   allowRestrictedEdit?: boolean;
 };
+
+const INVENTORY_RESULTS_PAGE_SIZE = 25;
 
 function cloneFormData(source: FormData): FormData {
   const fd = new FormData();
@@ -123,6 +130,8 @@ export function InventoryManager({
   const [, startDelete] = useTransition();
   const [deleteConfirmRow, setDeleteConfirmRow] = useState<InventoryRow | null>(null);
   const [deleteFeedbackMessage, setDeleteFeedbackMessage] = useState<string | null>(null);
+  const [inventoryResultsPage, setInventoryResultsPage] = useState(1);
+  const [statusSavingKey, setStatusSavingKey] = useState<string | null>(null);
 
   const editingRow = editingId
     ? (inventories.find((r) => r.id === editingId) ?? null)
@@ -215,6 +224,30 @@ export function InventoryManager({
     setDeleteConfirmRow(row);
   }
 
+  async function runWorkflowStatusUpdate(
+    rowId: string,
+    field: "tallying" | "pricing" | "stickering" | "supply",
+    value: string,
+  ) {
+    setRowError(null);
+    const key = `${rowId}:${field}`;
+    setStatusSavingKey(key);
+    try {
+      const r = await updateInventoryWorkflowStatus({
+        id: rowId,
+        field,
+        value: value.trim() ? value : null,
+      });
+      if (r.error) {
+        setRowError(r.error);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setStatusSavingKey(null);
+    }
+  }
+
   function confirmDeleteRow() {
     if (!deleteConfirmRow) return;
     const row = deleteConfirmRow;
@@ -263,6 +296,37 @@ export function InventoryManager({
         }
         return true;
       });
+
+  const inventoryFilterKey = `${listSearchLower}\0${adminPaymentStatusFilter}\0${adminDebitNoteFilter}`;
+  const prevInventoryFilterKeyRef = useRef(inventoryFilterKey);
+  useEffect(() => {
+    const totalPages = Math.max(
+      1,
+      Math.ceil(filteredByAdminControls.length / INVENTORY_RESULTS_PAGE_SIZE),
+    );
+    const filterChanged = prevInventoryFilterKeyRef.current !== inventoryFilterKey;
+    prevInventoryFilterKeyRef.current = inventoryFilterKey;
+    setInventoryResultsPage((p) => {
+      if (filterChanged) return 1;
+      return p > totalPages ? totalPages : p;
+    });
+  }, [inventoryFilterKey, filteredByAdminControls.length]);
+
+  const inventoryResultsTotal = filteredByAdminControls.length;
+  const inventoryResultsTotalPages = Math.max(
+    1,
+    Math.ceil(inventoryResultsTotal / INVENTORY_RESULTS_PAGE_SIZE),
+  );
+  const paginatedInventories = useMemo(() => {
+    const start = (inventoryResultsPage - 1) * INVENTORY_RESULTS_PAGE_SIZE;
+    return filteredByAdminControls.slice(start, start + INVENTORY_RESULTS_PAGE_SIZE);
+  }, [filteredByAdminControls, inventoryResultsPage]);
+  const inventoryResultsRangeStart =
+    inventoryResultsTotal === 0 ? 0 : (inventoryResultsPage - 1) * INVENTORY_RESULTS_PAGE_SIZE + 1;
+  const inventoryResultsRangeEnd = Math.min(
+    inventoryResultsTotal,
+    inventoryResultsPage * INVENTORY_RESULTS_PAGE_SIZE,
+  );
 
   function handleExportExcel() {
     if (filteredByAdminControls.length === 0) return;
@@ -616,7 +680,7 @@ export function InventoryManager({
         ) : (
           <>
             <div className="divide-y divide-[#245236]/15 md:hidden">
-              {filteredByAdminControls.map((row) => (
+              {paginatedInventories.map((row) => (
                 <article key={row.id} className="space-y-3 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -659,14 +723,64 @@ export function InventoryManager({
                       <p className="text-[#245236]/85">{row.location ?? "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-[#245236]/70">Created</p>
-                      <p className="text-[#245236]/85">{formatDate(row.created_at)}</p>
+                      <p className="text-xs text-[#245236]/70">Tallying</p>
+                      {canManage || allowRestrictedEdit ? (
+                        <InlineWorkflowStatusSelect
+                          field="tallying"
+                          value={row.tallying}
+                          disabled={statusSavingKey === `${row.id}:tallying`}
+                          onChange={(value) =>
+                            void runWorkflowStatusUpdate(row.id, "tallying", value)
+                          }
+                        />
+                      ) : (
+                        <p className="text-[#245236]/85">{row.tallying ?? "—"}</p>
+                      )}
                     </div>
                     <div>
-                      <p className="text-xs text-[#245236]/70">Updated</p>
-                      <p className="text-[#245236]/85">
-                        {row.updated_at ? formatDate(row.updated_at) : "—"}
-                      </p>
+                      <p className="text-xs text-[#245236]/70">Pricing</p>
+                      {canManage || allowRestrictedEdit ? (
+                        <InlineWorkflowStatusSelect
+                          field="pricing"
+                          value={row.pricing}
+                          disabled={statusSavingKey === `${row.id}:pricing`}
+                          onChange={(value) =>
+                            void runWorkflowStatusUpdate(row.id, "pricing", value)
+                          }
+                        />
+                      ) : (
+                        <p className="text-[#245236]/85">{row.pricing ?? "—"}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Stickering</p>
+                      {canManage || allowRestrictedEdit ? (
+                        <InlineWorkflowStatusSelect
+                          field="stickering"
+                          value={row.stickering}
+                          disabled={statusSavingKey === `${row.id}:stickering`}
+                          onChange={(value) =>
+                            void runWorkflowStatusUpdate(row.id, "stickering", value)
+                          }
+                        />
+                      ) : (
+                        <p className="text-[#245236]/85">{row.stickering ?? "—"}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#245236]/70">Supply</p>
+                      {canManage || allowRestrictedEdit ? (
+                        <InlineWorkflowStatusSelect
+                          field="supply"
+                          value={row.supply}
+                          disabled={statusSavingKey === `${row.id}:supply`}
+                          onChange={(value) =>
+                            void runWorkflowStatusUpdate(row.id, "supply", value)
+                          }
+                        />
+                      ) : (
+                        <p className="text-[#245236]/85">{row.supply ?? "—"}</p>
+                      )}
                     </div>
                   </div>
 
@@ -734,13 +848,11 @@ export function InventoryManager({
                   {canManage ? <th className="px-4 py-3">Pay mode</th> : null}
                   {canManage ? <th className="px-4 py-3">Pay status</th> : null}
                   <th className="px-4 py-3">Debit note</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#245236]/15">
-                {filteredByAdminControls.map((row) => (
+                {paginatedInventories.map((row) => (
                   <tr
                     key={row.id}
                     className="hover:bg-[#FEED01]/20"
@@ -788,16 +900,64 @@ export function InventoryManager({
                           {row.received_quantity ?? "—"}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {row.tallying ?? "—"}
+                          {canManage || allowRestrictedEdit ? (
+                            <InlineWorkflowStatusSelect
+                              field="tallying"
+                              value={row.tallying}
+                              disabled={statusSavingKey === `${row.id}:tallying`}
+                              onChange={(value) =>
+                                void runWorkflowStatusUpdate(row.id, "tallying", value)
+                              }
+                              className="w-[145px]"
+                            />
+                          ) : (
+                            (row.tallying ?? "—")
+                          )}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {row.pricing ?? "—"}
+                          {canManage || allowRestrictedEdit ? (
+                            <InlineWorkflowStatusSelect
+                              field="pricing"
+                              value={row.pricing}
+                              disabled={statusSavingKey === `${row.id}:pricing`}
+                              onChange={(value) =>
+                                void runWorkflowStatusUpdate(row.id, "pricing", value)
+                              }
+                              className="w-[132px]"
+                            />
+                          ) : (
+                            (row.pricing ?? "—")
+                          )}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {row.stickering ?? "—"}
+                          {canManage || allowRestrictedEdit ? (
+                            <InlineWorkflowStatusSelect
+                              field="stickering"
+                              value={row.stickering}
+                              disabled={statusSavingKey === `${row.id}:stickering`}
+                              onChange={(value) =>
+                                void runWorkflowStatusUpdate(row.id, "stickering", value)
+                              }
+                              className="w-[132px]"
+                            />
+                          ) : (
+                            (row.stickering ?? "—")
+                          )}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
-                          {row.supply ?? "—"}
+                          {canManage || allowRestrictedEdit ? (
+                            <InlineWorkflowStatusSelect
+                              field="supply"
+                              value={row.supply}
+                              disabled={statusSavingKey === `${row.id}:supply`}
+                              onChange={(value) =>
+                                void runWorkflowStatusUpdate(row.id, "supply", value)
+                              }
+                              className="w-[132px]"
+                            />
+                          ) : (
+                            (row.supply ?? "—")
+                          )}
                         </td>
                         <td className="px-4 py-3 text-[#245236]/80">
                           {formatMaybeNumber(row.invoice_amount)}
@@ -828,12 +988,6 @@ export function InventoryManager({
                         ) : null}
                         <td className="px-4 py-3 text-[#245236]/80">
                           {linkCellButton(row.debit_note, isEmployee)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {formatDate(row.created_at)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.updated_at ? formatDate(row.updated_at) : "—"}
                         </td>
                         <td className="px-4 py-3 text-right">
                           {canManage || allowRestrictedEdit ? (
@@ -872,6 +1026,50 @@ export function InventoryManager({
               </tbody>
               </table>
             </div>
+            {inventoryResultsTotalPages > 1 ? (
+              <div className="flex flex-col gap-3 border-t border-[#245236]/15 bg-[#FEED01]/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-[#245236]/75">
+                  Showing{" "}
+                  <span className="tabular-nums font-medium text-[#245236]">
+                    {inventoryResultsRangeStart}–{inventoryResultsRangeEnd}
+                  </span>{" "}
+                  of{" "}
+                  <span className="tabular-nums font-medium text-[#245236]">
+                    {inventoryResultsTotal}
+                  </span>
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setInventoryResultsPage((p) => Math.max(1, p - 1))}
+                    disabled={inventoryResultsPage <= 1}
+                    className="rounded-lg border border-[#245236]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#245236] hover:bg-[#FEED01]/40 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span className="text-xs text-[#245236]/80">
+                    Page{" "}
+                    <span className="tabular-nums font-medium text-[#245236]">
+                      {inventoryResultsPage}
+                    </span>{" "}
+                    of{" "}
+                    <span className="tabular-nums font-medium text-[#245236]">
+                      {inventoryResultsTotalPages}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setInventoryResultsPage((p) => Math.min(inventoryResultsTotalPages, p + 1))
+                    }
+                    disabled={inventoryResultsPage >= inventoryResultsTotalPages}
+                    className="rounded-lg border border-[#245236]/30 bg-white px-3 py-1.5 text-xs font-medium text-[#245236] hover:bg-[#FEED01]/40 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </>
         )}
       </div>
@@ -1470,6 +1668,40 @@ function SubmitButton({
     <button type="submit" disabled={pending} className={className}>
       {pending ? loadingLabel : children}
     </button>
+  );
+}
+
+function InlineWorkflowStatusSelect({
+  field,
+  value,
+  disabled,
+  onChange,
+  className,
+}: {
+  field: "tallying" | "pricing" | "stickering" | "supply";
+  value: string | null | undefined;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  const options =
+    field === "tallying"
+      ? ["NOT STARTED", "NOT TALLYING", "TALLIED"]
+      : ["PENDING", "IN PROGRESS", "DONE"];
+  return (
+    <select
+      value={value ?? ""}
+      onChange={(event) => onChange(event.target.value)}
+      disabled={disabled}
+      className={`${className ?? "w-full"} rounded-md border border-[#245236]/25 bg-white px-2 py-1 text-xs text-[#245236] outline-none ring-[#245236]/30 focus:ring-2 disabled:cursor-not-allowed disabled:opacity-60`}
+    >
+      <option value="">—</option>
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
   );
 }
 

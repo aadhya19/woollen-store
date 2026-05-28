@@ -111,8 +111,6 @@ export function StyleManager({ styles }: Props) {
               <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                 <tr>
                   <th className="px-4 py-3">Name</th>
-                  <th className="px-4 py-3">Created</th>
-                  <th className="px-4 py-3">Updated</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -120,7 +118,7 @@ export function StyleManager({ styles }: Props) {
                 {styles.map((row) => (
                   <tr key={row.id} className="hover:bg-[#FEED01]/20">
                     {editingId === row.id ? (
-                      <td colSpan={4} className="px-4 py-3">
+                      <td colSpan={2} className="px-4 py-3">
                         <form action={runUpdate} className="flex flex-wrap items-end gap-3">
                           <input type="hidden" name="id" value={row.id} />
                           <label className="flex min-w-[200px] flex-1 flex-col gap-1 text-xs font-medium text-[#245236]/80">
@@ -154,12 +152,6 @@ export function StyleManager({ styles }: Props) {
                       <>
                         <td className="px-4 py-3 font-medium text-[#245236]">
                           {row.style_name ?? "—"}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                          {formatDate(row.created_at)}
-                        </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-[#245236]/80">
-                          {row.updated_at ? formatDate(row.updated_at) : "—"}
                         </td>
                         <td className="whitespace-nowrap px-4 py-3 text-right">
                           <button
@@ -203,13 +195,3 @@ function SubmitButton({
   );
 }
 
-function formatDate(iso: string) {
-  try {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    }).format(new Date(iso));
-  } catch {
-    return iso;
-  }
-}

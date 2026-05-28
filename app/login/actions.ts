@@ -15,7 +15,7 @@ export async function login(formData: FormData) {
 
   const { data: user, error: userError } = await supabase
     .from("Users")
-    .select("id, role, name")
+    .select("id, role, name, status")
     .eq("username", username)
     .eq("password", password)
     .maybeSingle();
@@ -42,6 +42,11 @@ export async function login(formData: FormData) {
 
   if (!role) {
     redirect("/login?error=role");
+  }
+
+  const userStatus = user.status?.toString().trim().toLowerCase() ?? "active";
+  if (userStatus !== "active") {
+    redirect("/login?error=inactive");
   }
 
   await setAuthCookie(role, user.id, user.name?.trim() || username);

@@ -30,6 +30,16 @@ function parseRoleId(
   return { role: raw, error: null };
 }
 
+function parseStatus(
+  formData: FormData,
+): { status: "active" | "inactive"; error: string | null } {
+  const raw = formData.get("status")?.toString().trim().toLowerCase() ?? "active";
+  if (raw === "active" || raw === "inactive") {
+    return { status: raw, error: null };
+  }
+  return { status: "active", error: "Invalid status value" };
+}
+
 export async function createUser(formData: FormData): Promise<ActionResult> {
   const authError = await requireActionRole(["admin"]);
   if (authError) return { error: authError };
@@ -39,11 +49,13 @@ export async function createUser(formData: FormData): Promise<ActionResult> {
   const password = emptyToNull(formData.get("password"));
   const { role, error: roleErr } = parseRoleId(formData);
   if (roleErr != null) return { error: roleErr };
+  const { status, error: statusErr } = parseStatus(formData);
+  if (statusErr != null) return { error: statusErr };
 
   const supabase = createSupabase();
   const { error } = await supabase
     .from("Users")
-    .insert({ name, username, password, role });
+    .insert({ name, username, password, role, status });
 
   if (error) {
     return { error: mapSupabaseError(error.message) };
@@ -65,6 +77,8 @@ export async function updateUser(formData: FormData): Promise<ActionResult> {
   const password = emptyToNull(formData.get("password"));
   const { role, error: roleErr } = parseRoleId(formData);
   if (roleErr != null) return { error: roleErr };
+  const { status, error: statusErr } = parseStatus(formData);
+  if (statusErr != null) return { error: statusErr };
 
   const supabase = createSupabase();
   const { error } = await supabase
@@ -74,6 +88,7 @@ export async function updateUser(formData: FormData): Promise<ActionResult> {
       username,
       password,
       role,
+      status,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
