@@ -7,7 +7,7 @@ import type { ProductRow } from "./types";
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
-  await requireAuth(["admin"]);
+  await requireAuth(["admin", "manager"]);
   const supabase = createSupabase();
 
   const productsRes = await supabase

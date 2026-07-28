@@ -21,7 +21,7 @@ function mapSupabaseError(message: string) {
 export async function createTransport(
   formData: FormData,
 ): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const transport_name = emptyToNull(formData.get("transport_name"));
@@ -41,7 +41,7 @@ export async function createTransport(
 export async function updateTransport(
   formData: FormData,
 ): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const id = formData.get("id")?.toString() ?? "";

@@ -32,7 +32,7 @@ function resolveAgentDisplayName(
 export const dynamic = "force-dynamic";
 
 export default async function StockPage() {
-  const session = await requireAuth(["admin", "user"]);
+  const session = await requireAuth(["admin", "user", "manager"]);
   const supabase = createSupabase();
 
   const [
@@ -156,7 +156,7 @@ export default async function StockPage() {
           fabrics={fabricOptions}
           sizes={sizeOptions}
           inventoryForStock={inventoryForStock}
-          canManage={session.role === "admin"}
+          canManage={session.role === "admin" || session.role === "manager"}
           allowRestrictedEdit={session.role === "user"}
         />
       )}

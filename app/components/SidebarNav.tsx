@@ -9,21 +9,24 @@ type SidebarNavProps = {
   mobile?: boolean;
 };
 
+const adminNav = [
+  { href: "/", label: "Dashboard" },
+  { href: "/users", label: "Users" },
+  { href: "/agents", label: "Agents" },
+  { href: "/inventory", label: "Invoices" },
+  { href: "/brands", label: "Brands" },
+  { href: "/products", label: "Products" },
+  { href: "/style", label: "Style" },
+  { href: "/fabric", label: "Fabric" },
+  { href: "/sizes", label: "Sizes" },
+  { href: "/stock", label: "Inventory" },
+  { href: "/transports", label: "Transports" },
+  { href: "/documents", label: "Documents" },
+];
+
 const navByRole: Record<UserRole, Array<{ href: string; label: string }>> = {
-  admin: [
-    { href: "/", label: "Dashboard" },
-    { href: "/users", label: "Users" },
-    { href: "/agents", label: "Agents" },
-    { href: "/inventory", label: "Invoices" },
-    { href: "/brands", label: "Brands" },
-    { href: "/products", label: "Products" },
-    { href: "/style", label: "Style" },
-    { href: "/fabric", label: "Fabric" },
-    { href: "/sizes", label: "Sizes" },
-    { href: "/stock", label: "Inventory" },
-    { href: "/transports", label: "Transports" },
-    { href: "/documents", label: "Documents" },
-  ],
+  admin: adminNav,
+  manager: adminNav.filter((link) => link.href !== "/users"),
   user: [
     { href: "/", label: "Dashboard" },
     { href: "/inventory", label: "Invoices" },

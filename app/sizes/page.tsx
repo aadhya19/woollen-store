@@ -7,7 +7,7 @@ import type { SizeRow } from "./types";
 export const dynamic = "force-dynamic";
 
 export default async function SizesPage() {
-  await requireAuth(["admin"]);
+  await requireAuth(["admin", "manager"]);
   const supabase = createSupabase();
   const { data, error } = await supabase
     .from("Sizes")

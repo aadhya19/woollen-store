@@ -36,9 +36,11 @@ export async function login(formData: FormData) {
       ? null
       : roleText === "admin"
         ? "admin"
-        : roleText === "user" || roleText === "employee"
-          ? "user"
-          : null;
+        : roleText === "manager"
+          ? "manager"
+          : roleText === "user" || roleText === "employee"
+            ? "user"
+            : null;
 
   if (!role) {
     redirect("/login?error=role");

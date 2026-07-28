@@ -19,7 +19,7 @@ function mapSupabaseError(message: string) {
 }
 
 export async function createBrand(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const brand_name = emptyToNull(formData.get("brand_name"));
@@ -33,7 +33,7 @@ export async function createBrand(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateBrand(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const id = formData.get("id")?.toString() ?? "";

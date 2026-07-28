@@ -31,7 +31,7 @@ function isAllowedFile(file: File) {
 export async function uploadDocument(
   formData: FormData,
 ): Promise<UploadDocumentResult> {
-  const authError = await requireActionRole(["admin", "user"]);
+  const authError = await requireActionRole(["admin", "user", "manager"]);
   if (authError) return { error: authError, success: null, fileUrl: null };
 
   const fileValue = formData.get("document");

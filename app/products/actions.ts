@@ -19,7 +19,7 @@ function mapSupabaseError(message: string) {
 }
 
 export async function createProduct(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const product_name = emptyToNull(formData.get("product_name"));
@@ -36,7 +36,7 @@ export async function createProduct(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateProduct(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const id = formData.get("id")?.toString() ?? "";

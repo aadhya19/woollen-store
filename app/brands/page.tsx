@@ -7,7 +7,7 @@ import type { BrandRow } from "./types";
 export const dynamic = "force-dynamic";
 
 export default async function BrandsPage() {
-  await requireAuth(["admin"]);
+  await requireAuth(["admin", "manager"]);
   const supabase = createSupabase();
   const { data, error } = await supabase
     .from("Brand")

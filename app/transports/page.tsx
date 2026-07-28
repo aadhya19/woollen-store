@@ -7,7 +7,7 @@ import type { TransportRow } from "./types";
 export const dynamic = "force-dynamic";
 
 export default async function TransportsPage() {
-  await requireAuth(["admin"]);
+  await requireAuth(["admin", "manager"]);
   const supabase = createSupabase();
   const { data, error } = await supabase
     .from("Transport")

@@ -401,7 +401,7 @@ async function assertInventoryNumberUnique(
 export async function createInventory(
   formData: FormData,
 ): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin", "user"]);
+  const authError = await requireActionRole(["admin", "user", "manager"]);
   if (authError) return { error: authError };
   const session = await getAuthSession();
   if (!session) return { error: "Not authenticated. Please log in." };
@@ -502,7 +502,7 @@ export async function createInventory(
 }
 
 export async function deleteInventory(id: string): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
   if (!id) return { error: "Missing inventory id" };
 
@@ -546,10 +546,15 @@ export async function updateInventory(
 ): Promise<ActionResult> {
   const session = await getAuthSession();
   if (!session) return { error: "Not authenticated. Please log in." };
-  if (session.role !== "admin" && session.role !== "user") {
+  if (
+    session.role !== "admin" &&
+    session.role !== "manager" &&
+    session.role !== "user"
+  ) {
     return { error: "You do not have permission to perform this action." };
   }
   const isAdmin = session.role === "admin";
+  const canFullyManage = session.role === "admin" || session.role === "manager";
 
   const id = formData.get("id")?.toString() ?? "";
   if (!id) return { error: "Missing inventory id" };
@@ -639,14 +644,20 @@ export async function updateInventory(
 
   const supabase = createSupabase();
 
-  if (isAdmin) {
+  if (canFullyManage) {
     const uniqErr = await assertInventoryNumberUnique(inventory_number, id);
     if (uniqErr.error) return uniqErr;
+
+    const updatePayload = isAdmin
+      ? parsed
+      : (({ payment_details: _pd, payment_mode: _pm, payment_status: _ps, ...rest }) => rest)(
+          parsed,
+        );
 
     const { error } = await supabase
       .from("Inventory")
       .update({
-        ...parsed,
+        ...updatePayload,
         updated_at: new Date().toISOString(),
       })
       .eq("id", id);
@@ -690,7 +701,7 @@ export async function updateInventoryWorkflowStatus(input: {
   field: WorkflowStatusField;
   value: string | null;
 }): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin", "user"]);
+  const authError = await requireActionRole(["admin", "user", "manager"]);
   if (authError) return { error: authError };
 
   const id = input.id?.toString().trim();

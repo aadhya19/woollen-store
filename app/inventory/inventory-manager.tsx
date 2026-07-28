@@ -26,11 +26,197 @@ type Props = {
   users: UserLookupRow[];
   inventoryExportItems: InventoryExportItemRow[];
   canManage: boolean;
+  /** Admin only: payment columns, filters, and form fields. */
+  showPaymentFields?: boolean;
   /** Employee: can edit existing rows but only fields that are still empty (server enforces). */
   allowRestrictedEdit?: boolean;
 };
 
 const INVENTORY_RESULTS_PAGE_SIZE = 25;
+
+const INVENTORY_TABLE_HIDDEN_COLUMNS_KEY = "inventory-table-hidden-columns";
+
+type InventoryTableColumnId =
+  | "inventory_number"
+  | "company_name"
+  | "agent_name"
+  | "transport_name"
+  | "waybill_number"
+  | "transport_charges"
+  | "date_of_entry"
+  | "loading_charges"
+  | "staff_name"
+  | "location"
+  | "invoice_number"
+  | "number_of_parcels"
+  | "billed_quantity"
+  | "received_quantity"
+  | "tallying"
+  | "pricing"
+  | "stickering"
+  | "supply"
+  | "invoice_amount"
+  | "invoice_date"
+  | "invoice_image_url"
+  | "product_image"
+  | "payment_details"
+  | "payment_mode"
+  | "payment_status"
+  | "debit_note";
+
+const INVENTORY_TABLE_COLUMNS: {
+  id: InventoryTableColumnId;
+  label: string;
+  adminOnly?: boolean;
+}[] = [
+  { id: "inventory_number", label: "Inventory #" },
+  { id: "company_name", label: "Company" },
+  { id: "agent_name", label: "Agent" },
+  { id: "transport_name", label: "Transport" },
+  { id: "waybill_number", label: "Waybill" },
+  { id: "transport_charges", label: "Trans. charges" },
+  { id: "date_of_entry", label: "Entry date" },
+  { id: "loading_charges", label: "Loading ch." },
+  { id: "staff_name", label: "Staff" },
+  { id: "location", label: "Location" },
+  { id: "invoice_number", label: "Invoice #" },
+  { id: "number_of_parcels", label: "Parcels" },
+  { id: "billed_quantity", label: "Billed qty" },
+  { id: "received_quantity", label: "Received qty" },
+  { id: "tallying", label: "Tallying" },
+  { id: "pricing", label: "Pricing" },
+  { id: "stickering", label: "Stickering" },
+  { id: "supply", label: "Supply" },
+  { id: "invoice_amount", label: "Inv. amount" },
+  { id: "invoice_date", label: "Inv. date" },
+  { id: "invoice_image_url", label: "Inv. image" },
+  { id: "product_image", label: "Product image" },
+  { id: "payment_details", label: "Pay details", adminOnly: true },
+  { id: "payment_mode", label: "Pay mode", adminOnly: true },
+  { id: "payment_status", label: "Pay status", adminOnly: true },
+  { id: "debit_note", label: "Debit note" },
+];
+
+const INVENTORY_TABLE_COLUMN_IDS = new Set<InventoryTableColumnId>(
+  INVENTORY_TABLE_COLUMNS.map((col) => col.id),
+);
+
+function readHiddenInventoryColumns(): Set<InventoryTableColumnId> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(INVENTORY_TABLE_HIDDEN_COLUMNS_KEY);
+    if (!raw) return new Set();
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    const hidden = parsed.filter(
+      (id): id is InventoryTableColumnId =>
+        typeof id === "string" && INVENTORY_TABLE_COLUMN_IDS.has(id as InventoryTableColumnId),
+    );
+    return new Set(hidden);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeHiddenInventoryColumns(hidden: Set<InventoryTableColumnId>) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(
+    INVENTORY_TABLE_HIDDEN_COLUMNS_KEY,
+    JSON.stringify([...hidden]),
+  );
+}
+
+function inventoryTableCellClass(columnId: InventoryTableColumnId): string {
+  switch (columnId) {
+    case "inventory_number":
+      return "px-4 py-3 font-medium tabular-nums text-[#245236]";
+    case "company_name":
+      return "px-4 py-3 font-medium text-[#245236]";
+    case "invoice_number":
+    case "payment_details":
+      return "max-w-[140px] truncate px-4 py-3 text-[#245236]/80";
+    default:
+      return "px-4 py-3 text-[#245236]/80";
+  }
+}
+
+function InventoryTableColumnPicker({
+  columns,
+  hiddenIds,
+  onToggle,
+  onShowAll,
+}: {
+  columns: readonly { id: InventoryTableColumnId; label: string }[];
+  hiddenIds: Set<InventoryTableColumnId>;
+  onToggle: (id: InventoryTableColumnId) => void;
+  onShowAll: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocumentClick(event: MouseEvent) {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocumentClick);
+    return () => document.removeEventListener("mousedown", onDocumentClick);
+  }, [open]);
+
+  const hiddenCount = columns.filter((col) => hiddenIds.has(col.id)).length;
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        className="inline-flex items-center justify-center rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+      >
+        Columns
+        {hiddenCount > 0 ? (
+          <span className="ml-1.5 rounded-full bg-[#245236]/15 px-1.5 py-0.5 text-xs tabular-nums">
+            {hiddenCount} hidden
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="absolute right-0 z-20 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-lg border border-[#245236]/20 bg-white p-3 shadow-lg">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-[#245236]/80">Show columns</p>
+            <button
+              type="button"
+              onClick={onShowAll}
+              className="text-xs font-medium text-[#245236] underline-offset-2 hover:underline"
+            >
+              Show all
+            </button>
+          </div>
+          <ul className="max-h-[min(50vh,20rem)] space-y-1 overflow-y-auto">
+            {columns.map((col) => {
+              const visible = !hiddenIds.has(col.id);
+              return (
+                <li key={col.id}>
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-[#245236] hover:bg-[#FEED01]/25">
+                    <input
+                      type="checkbox"
+                      checked={visible}
+                      onChange={() => onToggle(col.id)}
+                      className="size-4 rounded border-[#245236]/30 text-[#245236] focus:ring-[#245236]/40"
+                    />
+                    {col.label}
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function cloneFormData(source: FormData): FormData {
   const fd = new FormData();
@@ -106,6 +292,7 @@ export function InventoryManager({
   users,
   inventoryExportItems,
   canManage,
+  showPaymentFields = false,
   allowRestrictedEdit = false,
 }: Props) {
   const router = useRouter();
@@ -132,6 +319,20 @@ export function InventoryManager({
   const [deleteFeedbackMessage, setDeleteFeedbackMessage] = useState<string | null>(null);
   const [inventoryResultsPage, setInventoryResultsPage] = useState(1);
   const [statusSavingKey, setStatusSavingKey] = useState<string | null>(null);
+  const [hiddenColumnIds, setHiddenColumnIds] = useState<Set<InventoryTableColumnId>>(
+    () => new Set(),
+  );
+  const [columnPrefsLoaded, setColumnPrefsLoaded] = useState(false);
+
+  useEffect(() => {
+    setHiddenColumnIds(readHiddenInventoryColumns());
+    setColumnPrefsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!columnPrefsLoaded) return;
+    writeHiddenInventoryColumns(hiddenColumnIds);
+  }, [hiddenColumnIds, columnPrefsLoaded]);
 
   const editingRow = editingId
     ? (inventories.find((r) => r.id === editingId) ?? null)
@@ -174,7 +375,7 @@ export function InventoryManager({
         agentLabel,
         transportLabel,
         userLabel,
-      }, canManage),
+      }, showPaymentFields),
     );
     setCreateConfirmOpen(true);
   }
@@ -277,25 +478,145 @@ export function InventoryManager({
             agentLabel,
             transportLabel,
             userLabel,
-            includePaymentFields: canManage,
+            includePaymentFields: showPaymentFields,
           }),
         );
 
-  const filteredByAdminControls = !canManage
-    ? filteredInventories
-    : filteredInventories.filter((row) => {
-        if (adminPaymentStatusFilter) {
-          const status = (row.payment_status ?? "").trim();
-          if (status !== adminPaymentStatusFilter) return false;
-        }
-        if (adminDebitNoteFilter === "present" && !String(row.debit_note ?? "").trim()) {
-          return false;
-        }
-        if (adminDebitNoteFilter === "missing" && String(row.debit_note ?? "").trim()) {
-          return false;
-        }
-        return true;
-      });
+  const filteredByAdminControls = filteredInventories.filter((row) => {
+    if (showPaymentFields && adminPaymentStatusFilter) {
+      const status = (row.payment_status ?? "").trim();
+      if (status !== adminPaymentStatusFilter) return false;
+    }
+    if (canManage && adminDebitNoteFilter === "present" && !String(row.debit_note ?? "").trim()) {
+      return false;
+    }
+    if (canManage && adminDebitNoteFilter === "missing" && String(row.debit_note ?? "").trim()) {
+      return false;
+    }
+    return true;
+  });
+
+  const availableTableColumns = useMemo(
+    () => INVENTORY_TABLE_COLUMNS.filter((col) => !col.adminOnly || showPaymentFields),
+    [showPaymentFields],
+  );
+
+  const visibleTableColumns = useMemo(
+    () => availableTableColumns.filter((col) => !hiddenColumnIds.has(col.id)),
+    [availableTableColumns, hiddenColumnIds],
+  );
+
+  function toggleTableColumnVisibility(columnId: InventoryTableColumnId) {
+    setHiddenColumnIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(columnId)) next.delete(columnId);
+      else next.add(columnId);
+      return next;
+    });
+  }
+
+  function showAllTableColumns() {
+    setHiddenColumnIds(new Set());
+  }
+
+  function renderInventoryTableCell(row: InventoryRow, columnId: InventoryTableColumnId) {
+    switch (columnId) {
+      case "inventory_number":
+        return row.inventory_number ?? "—";
+      case "company_name":
+        return row.company_name ?? "—";
+      case "agent_name":
+        return agentLabel(row.agent_name);
+      case "transport_name":
+        return transportLabel(row.transport_name);
+      case "waybill_number":
+        return row.waybill_number ?? "—";
+      case "transport_charges":
+        return formatMaybeNumber(row.transport_charges);
+      case "date_of_entry":
+        return row.date_of_entry ?? "—";
+      case "loading_charges":
+        return formatMaybeNumber(row.loading_charges);
+      case "staff_name":
+        return userLabel(row.staff_name);
+      case "location":
+        return row.location ?? "—";
+      case "invoice_number":
+        return row.invoice_number ?? "—";
+      case "number_of_parcels":
+        return row.number_of_parcels ?? "—";
+      case "billed_quantity":
+        return row.billed_quantity ?? "—";
+      case "received_quantity":
+        return row.received_quantity ?? "—";
+      case "tallying":
+        return canManage || allowRestrictedEdit ? (
+          <InlineWorkflowStatusSelect
+            field="tallying"
+            value={row.tallying}
+            disabled={statusSavingKey === `${row.id}:tallying`}
+            onChange={(value) => void runWorkflowStatusUpdate(row.id, "tallying", value)}
+            className="w-[145px]"
+          />
+        ) : (
+          (row.tallying ?? "—")
+        );
+      case "pricing":
+        return canManage || allowRestrictedEdit ? (
+          <InlineWorkflowStatusSelect
+            field="pricing"
+            value={row.pricing}
+            disabled={statusSavingKey === `${row.id}:pricing`}
+            onChange={(value) => void runWorkflowStatusUpdate(row.id, "pricing", value)}
+            className="w-[132px]"
+          />
+        ) : (
+          (row.pricing ?? "—")
+        );
+      case "stickering":
+        return canManage || allowRestrictedEdit ? (
+          <InlineWorkflowStatusSelect
+            field="stickering"
+            value={row.stickering}
+            disabled={statusSavingKey === `${row.id}:stickering`}
+            onChange={(value) => void runWorkflowStatusUpdate(row.id, "stickering", value)}
+            className="w-[132px]"
+          />
+        ) : (
+          (row.stickering ?? "—")
+        );
+      case "supply":
+        return canManage || allowRestrictedEdit ? (
+          <InlineWorkflowStatusSelect
+            field="supply"
+            value={row.supply}
+            disabled={statusSavingKey === `${row.id}:supply`}
+            onChange={(value) => void runWorkflowStatusUpdate(row.id, "supply", value)}
+            className="w-[132px]"
+          />
+        ) : (
+          (row.supply ?? "—")
+        );
+      case "invoice_amount":
+        return formatMaybeNumber(row.invoice_amount);
+      case "invoice_date":
+        return row.invoice_date ?? "—";
+      case "invoice_image_url":
+        return linkCellButton(row.invoice_image_url, isEmployee);
+      case "product_image":
+        return linkCellButton(row.product_image, isEmployee);
+      case "payment_details":
+        return previewText(row.payment_details);
+      case "payment_mode":
+        return row.payment_mode ?? "—";
+      case "payment_status":
+        return row.payment_status ?? "—";
+      case "debit_note":
+        return linkCellButton(row.debit_note, isEmployee);
+      default:
+        return "—";
+    }
+  }
 
   const inventoryFilterKey = `${listSearchLower}\0${adminPaymentStatusFilter}\0${adminDebitNoteFilter}`;
   const prevInventoryFilterKeyRef = useRef(inventoryFilterKey);
@@ -326,6 +647,11 @@ export function InventoryManager({
   const inventoryResultsRangeEnd = Math.min(
     inventoryResultsTotal,
     inventoryResultsPage * INVENTORY_RESULTS_PAGE_SIZE,
+  );
+
+  const inventoryNumericTotals = useMemo(
+    () => computeInventoryNumericTotals(filteredByAdminControls),
+    [filteredByAdminControls],
   );
 
   function handleExportExcel() {
@@ -404,6 +730,7 @@ export function InventoryManager({
             transports={transports}
             users={users}
             canManage={canManage}
+            showPaymentFields={showPaymentFields}
           />
         </form>
       </Modal>
@@ -502,6 +829,7 @@ export function InventoryManager({
               transports={transports}
               users={users}
               canManage={canManage}
+              showPaymentFields={showPaymentFields}
               restrictEditToEmptyFields={allowRestrictedEdit && !canManage}
             />
             <div className="flex flex-wrap gap-2 pt-2">
@@ -613,6 +941,14 @@ export function InventoryManager({
                 className="min-w-0 flex-1 rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
               />
               <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <div className="hidden md:block">
+                  <InventoryTableColumnPicker
+                    columns={availableTableColumns}
+                    hiddenIds={hiddenColumnIds}
+                    onToggle={toggleTableColumnVisibility}
+                    onShowAll={showAllTableColumns}
+                  />
+                </div>
                 <button
                   type="button"
                   onClick={handleExportExcel}
@@ -635,19 +971,21 @@ export function InventoryManager({
           </label>
           {canManage ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
-                Payment status
-                <select
-                  value={adminPaymentStatusFilter}
-                  onChange={(e) => setAdminPaymentStatusFilter(e.target.value)}
-                  className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
-                >
-                  <option value="">All</option>
-                  <option value="PENDING">PENDING</option>
-                  <option value="PARTIAL">PARTIAL</option>
-                  <option value="DONE">DONE</option>
-                </select>
-              </label>
+              {showPaymentFields ? (
+                <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
+                  Payment status
+                  <select
+                    value={adminPaymentStatusFilter}
+                    onChange={(e) => setAdminPaymentStatusFilter(e.target.value)}
+                    className="rounded-lg border border-[#245236]/25 bg-white px-3 py-2 text-sm text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                  >
+                    <option value="">All</option>
+                    <option value="PENDING">PENDING</option>
+                    <option value="PARTIAL">PARTIAL</option>
+                    <option value="DONE">DONE</option>
+                  </select>
+                </label>
+              ) : null}
               <label className="flex flex-col gap-1 text-xs font-medium text-[#245236]/80">
                 Debit note
                 <select
@@ -679,6 +1017,10 @@ export function InventoryManager({
           </p>
         ) : (
           <>
+            <InventoryTotalsBar
+              rowCount={filteredByAdminControls.length}
+              totals={inventoryNumericTotals}
+            />
             <div className="divide-y divide-[#245236]/15 md:hidden">
               {paginatedInventories.map((row) => (
                 <article key={row.id} className="space-y-3 p-4">
@@ -819,35 +1161,17 @@ export function InventoryManager({
             </div>
 
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[2800px] text-left text-sm">
+              <table
+                className="w-full text-left text-sm"
+                style={{ minWidth: `${visibleTableColumns.length * 105 + 120}px` }}
+              >
               <thead className="border-b border-[#245236]/20 bg-[#FEED01]/25 text-xs font-medium uppercase tracking-wide text-[#245236]/80">
                 <tr>
-                  <th className="px-4 py-3">Inventory #</th>
-                  <th className="px-4 py-3">Company</th>
-                  <th className="px-4 py-3">Agent</th>
-                  <th className="px-4 py-3">Transport</th>
-                  <th className="px-4 py-3">Waybill</th>
-                  <th className="px-4 py-3">Trans. charges</th>
-                  <th className="px-4 py-3">Entry date</th>
-                  <th className="px-4 py-3">Loading ch.</th>
-                  <th className="px-4 py-3">Staff</th>
-                  <th className="px-4 py-3">Location</th>
-                  <th className="px-4 py-3">Invoice #</th>
-                  <th className="px-4 py-3">Parcels</th>
-                  <th className="px-4 py-3">Billed qty</th>
-                  <th className="px-4 py-3">Received qty</th>
-                  <th className="px-4 py-3">Tallying</th>
-                  <th className="px-4 py-3">Pricing</th>
-                  <th className="px-4 py-3">Stickering</th>
-                  <th className="px-4 py-3">Supply</th>
-                  <th className="px-4 py-3">Inv. amount</th>
-                  <th className="px-4 py-3">Inv. date</th>
-                  <th className="px-4 py-3">Inv. image</th>
-                  <th className="px-4 py-3">Product image</th>
-                  {canManage ? <th className="px-4 py-3">Pay details</th> : null}
-                  {canManage ? <th className="px-4 py-3">Pay mode</th> : null}
-                  {canManage ? <th className="px-4 py-3">Pay status</th> : null}
-                  <th className="px-4 py-3">Debit note</th>
+                  {visibleTableColumns.map((col) => (
+                    <th key={col.id} className="px-4 py-3">
+                      {col.label}
+                    </th>
+                  ))}
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
@@ -857,139 +1181,12 @@ export function InventoryManager({
                     key={row.id}
                     className="hover:bg-[#FEED01]/20"
                   >
-                    <td className="px-4 py-3 font-medium tabular-nums text-[#245236]">
-                          {row.inventory_number ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 font-medium text-[#245236]">
-                          {row.company_name ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {agentLabel(row.agent_name)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {transportLabel(row.transport_name)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.waybill_number ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {formatMaybeNumber(row.transport_charges)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.date_of_entry ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {formatMaybeNumber(row.loading_charges)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {userLabel(row.staff_name)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.location ?? "—"}
-                        </td>
-                        <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
-                          {row.invoice_number ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.number_of_parcels ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.billed_quantity ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.received_quantity ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {canManage || allowRestrictedEdit ? (
-                            <InlineWorkflowStatusSelect
-                              field="tallying"
-                              value={row.tallying}
-                              disabled={statusSavingKey === `${row.id}:tallying`}
-                              onChange={(value) =>
-                                void runWorkflowStatusUpdate(row.id, "tallying", value)
-                              }
-                              className="w-[145px]"
-                            />
-                          ) : (
-                            (row.tallying ?? "—")
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {canManage || allowRestrictedEdit ? (
-                            <InlineWorkflowStatusSelect
-                              field="pricing"
-                              value={row.pricing}
-                              disabled={statusSavingKey === `${row.id}:pricing`}
-                              onChange={(value) =>
-                                void runWorkflowStatusUpdate(row.id, "pricing", value)
-                              }
-                              className="w-[132px]"
-                            />
-                          ) : (
-                            (row.pricing ?? "—")
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {canManage || allowRestrictedEdit ? (
-                            <InlineWorkflowStatusSelect
-                              field="stickering"
-                              value={row.stickering}
-                              disabled={statusSavingKey === `${row.id}:stickering`}
-                              onChange={(value) =>
-                                void runWorkflowStatusUpdate(row.id, "stickering", value)
-                              }
-                              className="w-[132px]"
-                            />
-                          ) : (
-                            (row.stickering ?? "—")
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {canManage || allowRestrictedEdit ? (
-                            <InlineWorkflowStatusSelect
-                              field="supply"
-                              value={row.supply}
-                              disabled={statusSavingKey === `${row.id}:supply`}
-                              onChange={(value) =>
-                                void runWorkflowStatusUpdate(row.id, "supply", value)
-                              }
-                              className="w-[132px]"
-                            />
-                          ) : (
-                            (row.supply ?? "—")
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {formatMaybeNumber(row.invoice_amount)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {row.invoice_date ?? "—"}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {linkCellButton(row.invoice_image_url, isEmployee)}
-                        </td>
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {linkCellButton(row.product_image, isEmployee)}
-                        </td>
-                        {canManage ? (
-                          <td className="max-w-[140px] truncate px-4 py-3 text-[#245236]/80">
-                            {previewText(row.payment_details)}
-                          </td>
-                        ) : null}
-                        {canManage ? (
-                          <td className="px-4 py-3 text-[#245236]/80">
-                            {row.payment_mode ?? "—"}
-                          </td>
-                        ) : null}
-                        {canManage ? (
-                          <td className="px-4 py-3 text-[#245236]/80">
-                            {row.payment_status ?? "—"}
-                          </td>
-                        ) : null}
-                        <td className="px-4 py-3 text-[#245236]/80">
-                          {linkCellButton(row.debit_note, isEmployee)}
-                        </td>
-                        <td className="px-4 py-3 text-right">
+                    {visibleTableColumns.map((col) => (
+                      <td key={col.id} className={inventoryTableCellClass(col.id)}>
+                        {renderInventoryTableCell(row, col.id)}
+                      </td>
+                    ))}
+                    <td className="px-4 py-3 text-right">
                           {canManage || allowRestrictedEdit ? (
                             <div className="flex justify-end gap-2">
                               <button
@@ -1122,6 +1319,7 @@ function InventoryFormFields({
   transports,
   users,
   canManage,
+  showPaymentFields = false,
   restrictEditToEmptyFields = false,
 }: {
   mode: "create" | "edit";
@@ -1130,6 +1328,7 @@ function InventoryFormFields({
   transports: TransportLookupRow[];
   users: UserLookupRow[];
   canManage: boolean;
+  showPaymentFields?: boolean;
   restrictEditToEmptyFields?: boolean;
 }) {
   const v = values;
@@ -1491,7 +1690,7 @@ function InventoryFormFields({
         ) : null}
       </label>
 
-      {canManage ? (
+      {showPaymentFields ? (
         <>
           <label className={fieldLabelClass}>
             Payment details
@@ -1756,6 +1955,123 @@ function formatMaybeNumber(n: number | null | undefined) {
   if (n === null || n === undefined) return "—";
   if (typeof n === "number" && Number.isFinite(n)) return String(n);
   return "—";
+}
+
+function parseInventoryNumeric(value: number | string | null | undefined): number | null {
+  if (value == null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sumInventoryNumericField(
+  rows: InventoryRow[],
+  getter: (row: InventoryRow) => number | string | null | undefined,
+): number {
+  let sum = 0;
+  for (const row of rows) {
+    const value = parseInventoryNumeric(getter(row));
+    if (value != null) sum += value;
+  }
+  return sum;
+}
+
+function sumInventoryNumberField(
+  rows: InventoryRow[],
+  key: "transport_charges" | "loading_charges" | "invoice_amount",
+): number {
+  let sum = 0;
+  for (const row of rows) {
+    const value = row[key];
+    if (value != null && typeof value === "number" && Number.isFinite(value)) {
+      sum += value;
+    }
+  }
+  return sum;
+}
+
+function formatInventoryTotal(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (Number.isInteger(value)) return value.toLocaleString();
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
+}
+
+type InventoryNumericTotal = {
+  id: InventoryTableColumnId;
+  label: string;
+  value: number;
+  adminOnly?: boolean;
+};
+
+const INVENTORY_NUMERIC_TOTAL_FIELDS: {
+  id: InventoryTableColumnId;
+  label: string;
+  adminOnly?: boolean;
+}[] = [
+  { id: "transport_charges", label: "Trans. charges" },
+  { id: "loading_charges", label: "Loading ch." },
+  { id: "number_of_parcels", label: "Parcels" },
+  { id: "billed_quantity", label: "Billed qty" },
+  { id: "received_quantity", label: "Received qty" },
+  { id: "invoice_amount", label: "Inv. amount" },
+];
+
+function computeInventoryNumericTotals(rows: InventoryRow[]): InventoryNumericTotal[] {
+  return INVENTORY_NUMERIC_TOTAL_FIELDS.map((field) => {
+    let value = 0;
+    switch (field.id) {
+      case "transport_charges":
+        value = sumInventoryNumberField(rows, "transport_charges");
+        break;
+      case "loading_charges":
+        value = sumInventoryNumberField(rows, "loading_charges");
+        break;
+      case "invoice_amount":
+        value = sumInventoryNumberField(rows, "invoice_amount");
+        break;
+      case "number_of_parcels":
+        value = sumInventoryNumericField(rows, (row) => row.number_of_parcels);
+        break;
+      case "billed_quantity":
+        value = sumInventoryNumericField(rows, (row) => row.billed_quantity);
+        break;
+      case "received_quantity":
+        value = sumInventoryNumericField(rows, (row) => row.received_quantity);
+        break;
+    }
+    return { ...field, value };
+  });
+}
+
+function InventoryTotalsBar({
+  rowCount,
+  totals,
+}: {
+  rowCount: number;
+  totals: InventoryNumericTotal[];
+}) {
+  return (
+    <div className="border-b border-[#245236]/15 bg-[#FEED01]/10 px-4 py-3">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-[#245236]/70">
+        Totals across {rowCount.toLocaleString()} row{rowCount === 1 ? "" : "s"}
+      </p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3 lg:grid-cols-6">
+        {totals.map((total) => (
+          <div key={total.id}>
+            <dt className="text-xs text-[#245236]/70">{total.label}</dt>
+            <dd className="text-sm font-semibold tabular-nums text-[#245236]">
+              {formatInventoryTotal(total.value)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
 }
 
 function previewText(s: string | null | undefined, max = 48) {

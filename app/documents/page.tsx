@@ -7,7 +7,7 @@ type Props = {
 };
 
 export default async function DocumentsPage({ searchParams }: Props) {
-  await requireAuth(["admin", "user"]);
+  await requireAuth(["admin", "user", "manager"]);
   const q = await searchParams;
 
   return (

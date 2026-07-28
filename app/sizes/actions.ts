@@ -19,7 +19,7 @@ function mapSupabaseError(message: string) {
 }
 
 export async function createSize(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const size = emptyToNull(formData.get("size"));
@@ -33,7 +33,7 @@ export async function createSize(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateSize(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const id = formData.get("id")?.toString() ?? "";

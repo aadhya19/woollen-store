@@ -104,7 +104,7 @@ function parseStockRefsFromForm(formData: FormData): {
 }
 
 export async function createStock(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin", "user"]);
+  const authError = await requireActionRole(["admin", "user", "manager"]);
   if (authError) return { error: authError };
 
   const stock_number = emptyToNull(formData.get("stock_number"));
@@ -172,7 +172,7 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
 }
 
 export async function duplicateStock(id: string): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin", "user"]);
+  const authError = await requireActionRole(["admin", "user", "manager"]);
   if (authError) return { error: authError };
 
   if (!id.trim()) return { error: "Missing stock id" };
@@ -244,7 +244,7 @@ type StockParsed = StockRefs & {
 export async function updateStock(formData: FormData): Promise<ActionResult> {
   const session = await getAuthSession();
   if (!session) return { error: "Not authenticated. Please log in." };
-  if (session.role !== "admin" && session.role !== "user") {
+  if (session.role !== "admin" && session.role !== "manager" && session.role !== "user") {
     return { error: "You do not have permission to perform this action." };
   }
 
@@ -304,7 +304,7 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
 }
 
 export async function deleteStock(id: string): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   if (!id) return { error: "Missing stock id" };
@@ -318,7 +318,7 @@ export async function deleteStock(id: string): Promise<ActionResult> {
 }
 
 export async function deleteStockMany(ids: string[]): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const uniqueIds = Array.from(new Set(ids.map((id) => id.trim()).filter(Boolean)));

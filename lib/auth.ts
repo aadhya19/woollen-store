@@ -2,7 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "manager" | "user";
 
 type AuthPayload = {
   role: UserRole;
@@ -56,7 +56,9 @@ function parseAuthToken(token: string): AuthPayload | null {
   try {
     const payload = JSON.parse(base64UrlDecode(payloadText)) as AuthPayload;
     if (
-      (payload.role !== "admin" && payload.role !== "user") ||
+      payload.role !== "admin" &&
+      payload.role !== "manager" &&
+      payload.role !== "user" ||
       !payload.exp ||
       typeof payload.userId !== "string" ||
       !payload.userId.trim() ||

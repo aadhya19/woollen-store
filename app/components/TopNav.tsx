@@ -7,10 +7,33 @@ import PendingButton from "./PendingButton";
 const navClass =
   "text-sm font-medium text-[#245236] underline-offset-4 hover:underline";
 
+const adminLinks = [
+  { href: "/users", label: "Users" },
+  { href: "/agents", label: "Agents" },
+  { href: "/inventory", label: "Invoices" },
+  { href: "/brands", label: "Brands" },
+  { href: "/products", label: "Products" },
+  { href: "/style", label: "Style" },
+  { href: "/fabric", label: "Fabric" },
+  { href: "/sizes", label: "Sizes" },
+  { href: "/stock", label: "Inventory" },
+  { href: "/transports", label: "Transports" },
+];
+
 export default async function TopNav() {
   const session = await getAuthSession();
-  const isAdmin = session?.role === "admin";
-  const isUser = session?.role === "user";
+  const role = session?.role;
+  const links =
+    role === "admin"
+      ? adminLinks
+      : role === "manager"
+        ? adminLinks.filter((link) => link.href !== "/users")
+        : role === "user"
+          ? [
+              { href: "/inventory", label: "Invoices" },
+              { href: "/stock", label: "Inventory" },
+            ]
+          : [];
 
   return (
     <header className="border-b border-[#245236]/20 bg-white/90 backdrop-blur">
@@ -26,50 +49,11 @@ export default async function TopNav() {
           />
         </Link>
         <nav className="flex flex-wrap gap-x-4 gap-y-2">
-          {isAdmin ? (
-            <>
-              <Link href="/users" className={navClass}>
-                Users
-              </Link>
-              <Link href="/agents" className={navClass}>
-                Agents
-              </Link>
-              <Link href="/inventory" className={navClass}>
-                Invoices
-              </Link>
-              <Link href="/brands" className={navClass}>
-                Brands
-              </Link>
-              <Link href="/products" className={navClass}>
-                Products
-              </Link>
-              <Link href="/style" className={navClass}>
-                Style
-              </Link>
-              <Link href="/fabric" className={navClass}>
-                Fabric
-              </Link>
-              <Link href="/sizes" className={navClass}>
-                Sizes
-              </Link>
-              <Link href="/stock" className={navClass}>
-                Inventory
-              </Link>
-              <Link href="/transports" className={navClass}>
-                Transports
-              </Link>
-            </>
-          ) : null}
-          {isUser ? (
-            <>
-              <Link href="/inventory" className={navClass}>
-                Invoices
-              </Link>
-              <Link href="/stock" className={navClass}>
-                Inventory
-              </Link>
-            </>
-          ) : null}
+          {links.map((link) => (
+            <Link key={link.href} href={link.href} className={navClass}>
+              {link.label}
+            </Link>
+          ))}
           {session ? (
             <>
               <span className="text-sm text-[#245236]/70">
@@ -89,4 +73,3 @@ export default async function TopNav() {
     </header>
   );
 }
-

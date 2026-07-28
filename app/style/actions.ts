@@ -19,7 +19,7 @@ function mapSupabaseError(message: string) {
 }
 
 export async function createStyle(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const style_name = emptyToNull(formData.get("style_name"));
@@ -33,7 +33,7 @@ export async function createStyle(formData: FormData): Promise<ActionResult> {
 }
 
 export async function updateStyle(formData: FormData): Promise<ActionResult> {
-  const authError = await requireActionRole(["admin"]);
+  const authError = await requireActionRole(["admin", "manager"]);
   if (authError) return { error: authError };
 
   const id = formData.get("id")?.toString() ?? "";

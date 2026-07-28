@@ -13,7 +13,7 @@ import type {
 export const dynamic = "force-dynamic";
 
 export default async function InventoryPage() {
-  const session = await requireAuth(["admin", "user"]);
+  const session = await requireAuth(["admin", "user", "manager"]);
   const supabase = createSupabase();
   const inventoriesQuery = supabase
     .from("Inventory")
@@ -90,7 +90,8 @@ export default async function InventoryPage() {
           transports={(transportsRes.data ?? []) as TransportLookupRow[]}
           users={(usersRes.data ?? []) as UserLookupRow[]}
           inventoryExportItems={inventoryExportItems}
-          canManage={session.role === "admin"}
+          canManage={session.role === "admin" || session.role === "manager"}
+          showPaymentFields={session.role === "admin"}
           allowRestrictedEdit={session.role === "user"}
         />
       )}

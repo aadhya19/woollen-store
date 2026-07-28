@@ -7,7 +7,7 @@ import type { StyleRow } from "./types";
 export const dynamic = "force-dynamic";
 
 export default async function StylePage() {
-  await requireAuth(["admin"]);
+  await requireAuth(["admin", "manager"]);
   const supabase = createSupabase();
   const { data, error } = await supabase
     .from("Style")
