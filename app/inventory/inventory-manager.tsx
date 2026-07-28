@@ -54,7 +54,6 @@ type InventoryTableColumnId =
   | "tallying"
   | "pricing"
   | "stickering"
-  | "supply"
   | "invoice_amount"
   | "invoice_date"
   | "invoice_image_url"
@@ -86,7 +85,6 @@ const INVENTORY_TABLE_COLUMNS: {
   { id: "tallying", label: "Tallying" },
   { id: "pricing", label: "Pricing" },
   { id: "stickering", label: "Stickering" },
-  { id: "supply", label: "Supply" },
   { id: "invoice_amount", label: "Inv. amount" },
   { id: "invoice_date", label: "Inv. date" },
   { id: "invoice_image_url", label: "Inv. image" },
@@ -218,6 +216,593 @@ function InventoryTableColumnPicker({
   );
 }
 
+const INVENTORY_BLANK_FILTER_VALUE = "—";
+
+const INVENTORY_NO_FILTER_COLUMNS = new Set<InventoryTableColumnId>(["waybill_number"]);
+
+const INVENTORY_RANGE_FILTER_COLUMNS = new Set<InventoryTableColumnId>([
+  "transport_charges",
+  "loading_charges",
+  "number_of_parcels",
+  "billed_quantity",
+  "received_quantity",
+  "invoice_amount",
+]);
+
+const INVENTORY_DATE_FILTER_COLUMNS = new Set<InventoryTableColumnId>([
+  "date_of_entry",
+  "invoice_date",
+]);
+
+type InventoryColumnFilterLookups = {
+  agentLabel: (id: string | null) => string;
+  transportLabel: (id: string | null) => string;
+  userLabel: (id: string | null) => string;
+};
+
+type InventoryListColumnFilter = {
+  kind: "list";
+  selected: Set<string>;
+};
+
+type InventoryRangeColumnFilter = {
+  kind: "range";
+  min: number | null;
+  max: number | null;
+};
+
+type InventoryDateColumnFilter = {
+  kind: "date";
+  from: string | null;
+  to: string | null;
+};
+
+type InventoryColumnFilter =
+  | InventoryListColumnFilter
+  | InventoryRangeColumnFilter
+  | InventoryDateColumnFilter;
+
+function isInventoryRangeFilterColumn(columnId: InventoryTableColumnId): boolean {
+  return INVENTORY_RANGE_FILTER_COLUMNS.has(columnId);
+}
+
+function isInventoryDateFilterColumn(columnId: InventoryTableColumnId): boolean {
+  return INVENTORY_DATE_FILTER_COLUMNS.has(columnId);
+}
+
+function isInventoryListFilterColumn(columnId: InventoryTableColumnId): boolean {
+  return (
+    !INVENTORY_NO_FILTER_COLUMNS.has(columnId) &&
+    !isInventoryRangeFilterColumn(columnId) &&
+    !isInventoryDateFilterColumn(columnId)
+  );
+}
+
+function toInventoryFilterDateString(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  const trimmed = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return null;
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function inventoryColumnDateValue(
+  row: InventoryRow,
+  columnId: InventoryTableColumnId,
+): string | null {
+  switch (columnId) {
+    case "date_of_entry":
+      return toInventoryFilterDateString(row.date_of_entry);
+    case "invoice_date":
+      return toInventoryFilterDateString(row.invoice_date);
+    default:
+      return null;
+  }
+}
+
+function inventoryColumnNumericValue(
+  row: InventoryRow,
+  columnId: InventoryTableColumnId,
+): number | null {
+  switch (columnId) {
+    case "transport_charges":
+      return parseInventoryNumeric(row.transport_charges);
+    case "loading_charges":
+      return parseInventoryNumeric(row.loading_charges);
+    case "number_of_parcels":
+      return parseInventoryNumeric(row.number_of_parcels);
+    case "billed_quantity":
+      return parseInventoryNumeric(row.billed_quantity);
+    case "received_quantity":
+      return parseInventoryNumeric(row.received_quantity);
+    case "invoice_amount":
+      return parseInventoryNumeric(row.invoice_amount);
+    default:
+      return null;
+  }
+}
+
+function inventoryColumnFilterValue(
+  row: InventoryRow,
+  columnId: InventoryTableColumnId,
+  lookups: InventoryColumnFilterLookups,
+): string {
+  switch (columnId) {
+    case "inventory_number":
+      return row.inventory_number?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "company_name":
+      return row.company_name?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "agent_name":
+      return lookups.agentLabel(row.agent_name);
+    case "transport_name":
+      return lookups.transportLabel(row.transport_name);
+    case "waybill_number":
+      return row.waybill_number?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "transport_charges":
+      return formatMaybeNumber(row.transport_charges);
+    case "date_of_entry":
+      return row.date_of_entry?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "loading_charges":
+      return formatMaybeNumber(row.loading_charges);
+    case "staff_name":
+      return lookups.userLabel(row.staff_name);
+    case "location":
+      return row.location?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "invoice_number":
+      return row.invoice_number?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "number_of_parcels":
+      return row.number_of_parcels == null || String(row.number_of_parcels).trim() === ""
+        ? INVENTORY_BLANK_FILTER_VALUE
+        : String(row.number_of_parcels);
+    case "billed_quantity":
+      return row.billed_quantity == null || String(row.billed_quantity).trim() === ""
+        ? INVENTORY_BLANK_FILTER_VALUE
+        : String(row.billed_quantity);
+    case "received_quantity":
+      return row.received_quantity == null || String(row.received_quantity).trim() === ""
+        ? INVENTORY_BLANK_FILTER_VALUE
+        : String(row.received_quantity);
+    case "tallying":
+      return row.tallying?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "pricing":
+      return row.pricing?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "stickering":
+      return row.stickering?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "invoice_amount":
+      return formatMaybeNumber(row.invoice_amount);
+    case "invoice_date":
+      return row.invoice_date?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "invoice_image_url":
+      return row.invoice_image_url?.trim() ? "Present" : INVENTORY_BLANK_FILTER_VALUE;
+    case "product_image":
+      return row.product_image?.trim() ? "Present" : INVENTORY_BLANK_FILTER_VALUE;
+    case "payment_details":
+      return row.payment_details?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "payment_mode":
+      return row.payment_mode?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "payment_status":
+      return row.payment_status?.trim() || INVENTORY_BLANK_FILTER_VALUE;
+    case "debit_note":
+      return row.debit_note?.trim() ? "Present" : INVENTORY_BLANK_FILTER_VALUE;
+    default:
+      return INVENTORY_BLANK_FILTER_VALUE;
+  }
+}
+
+function rowMatchesInventoryColumnFilter(
+  row: InventoryRow,
+  columnId: InventoryTableColumnId,
+  filter: InventoryColumnFilter,
+  lookups: InventoryColumnFilterLookups,
+): boolean {
+  if (filter.kind === "range") {
+    const value = inventoryColumnNumericValue(row, columnId);
+    if (value == null) return false;
+    if (filter.min != null && value < filter.min) return false;
+    if (filter.max != null && value > filter.max) return false;
+    return true;
+  }
+  if (filter.kind === "date") {
+    const value = inventoryColumnDateValue(row, columnId);
+    if (value == null) return false;
+    if (filter.from && value < filter.from) return false;
+    if (filter.to && value > filter.to) return false;
+    return true;
+  }
+  return filter.selected.has(inventoryColumnFilterValue(row, columnId, lookups));
+}
+
+function isInventoryColumnFilterActive(filter: InventoryColumnFilter | undefined): boolean {
+  if (!filter) return false;
+  if (filter.kind === "list") return true;
+  if (filter.kind === "date") return Boolean(filter.from || filter.to);
+  return filter.min != null || filter.max != null;
+}
+
+function serializeInventoryColumnFilters(
+  filters: Partial<Record<InventoryTableColumnId, InventoryColumnFilter>>,
+): string {
+  return Object.entries(filters)
+    .filter(([, filter]) => isInventoryColumnFilterActive(filter))
+    .map(([id, filter]) => {
+      if (!filter) return `${id}:`;
+      if (filter.kind === "range") {
+        return `${id}:range:${filter.min ?? ""}\u001f${filter.max ?? ""}`;
+      }
+      if (filter.kind === "date") {
+        return `${id}:date:${filter.from ?? ""}\u001f${filter.to ?? ""}`;
+      }
+      return `${id}:list:${[...filter.selected].sort().join("\u001f")}`;
+    })
+    .sort()
+    .join("\u001e");
+}
+
+function parseOptionalFilterNumber(raw: string): number | null | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) return undefined;
+  return parsed;
+}
+
+function formatFilterNumberBound(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "";
+  return String(value);
+}
+
+function inventoryColumnFilterMode(
+  columnId: InventoryTableColumnId,
+): "list" | "range" | "date" {
+  if (isInventoryRangeFilterColumn(columnId)) return "range";
+  if (isInventoryDateFilterColumn(columnId)) return "date";
+  return "list";
+}
+
+function InventoryExcelColumnFilter({
+  columnId,
+  label,
+  mode,
+  uniqueValues,
+  filter,
+  dataMin,
+  dataMax,
+  dateMin,
+  dateMax,
+  onChange,
+  onClear,
+}: {
+  columnId: InventoryTableColumnId;
+  label: string;
+  mode: "list" | "range" | "date";
+  uniqueValues: string[];
+  filter: InventoryColumnFilter | undefined;
+  dataMin: number | null;
+  dataMax: number | null;
+  dateMin: string | null;
+  dateMax: string | null;
+  onChange: (columnId: InventoryTableColumnId, next: InventoryColumnFilter | undefined) => void;
+  onClear: (columnId: InventoryTableColumnId) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [valueSearch, setValueSearch] = useState("");
+  const [minDraft, setMinDraft] = useState("");
+  const [maxDraft, setMaxDraft] = useState("");
+  const [fromDraft, setFromDraft] = useState("");
+  const [toDraft, setToDraft] = useState("");
+  const rootRef = useRef<HTMLDivElement>(null);
+  const isActive = isInventoryColumnFilterActive(filter);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocumentClick(event: MouseEvent) {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", onDocumentClick);
+    return () => document.removeEventListener("mousedown", onDocumentClick);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setValueSearch("");
+      return;
+    }
+    if (mode === "range") {
+      const range = filter?.kind === "range" ? filter : undefined;
+      setMinDraft(formatFilterNumberBound(range?.min));
+      setMaxDraft(formatFilterNumberBound(range?.max));
+    }
+    if (mode === "date") {
+      const date = filter?.kind === "date" ? filter : undefined;
+      setFromDraft(date?.from ?? "");
+      setToDraft(date?.to ?? "");
+    }
+  }, [open, mode, filter]);
+
+  const listSelected =
+    filter?.kind === "list" ? filter.selected : undefined;
+  const effectiveSelected = listSelected ?? new Set(uniqueValues);
+  const valueSearchLower = valueSearch.trim().toLowerCase();
+  const visibleValues =
+    valueSearchLower.length === 0
+      ? uniqueValues
+      : uniqueValues.filter((value) => value.toLowerCase().includes(valueSearchLower));
+  const allVisibleSelected =
+    visibleValues.length > 0 && visibleValues.every((value) => effectiveSelected.has(value));
+
+  function toggleValue(value: string) {
+    const next = new Set(effectiveSelected);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    if (next.size === uniqueValues.length && uniqueValues.every((v) => next.has(v))) {
+      onChange(columnId, undefined);
+      return;
+    }
+    onChange(columnId, { kind: "list", selected: next });
+  }
+
+  function toggleSelectAllVisible() {
+    const next = new Set(effectiveSelected);
+    if (allVisibleSelected) {
+      for (const value of visibleValues) next.delete(value);
+    } else {
+      for (const value of visibleValues) next.add(value);
+    }
+    if (next.size === uniqueValues.length && uniqueValues.every((v) => next.has(v))) {
+      onChange(columnId, undefined);
+      return;
+    }
+    onChange(columnId, { kind: "list", selected: next });
+  }
+
+  function applyRangeDraft() {
+    const min = parseOptionalFilterNumber(minDraft);
+    const max = parseOptionalFilterNumber(maxDraft);
+    if (min === undefined || max === undefined) return;
+    if (min == null && max == null) {
+      onChange(columnId, undefined);
+      return;
+    }
+    if (min != null && max != null && min > max) return;
+    onChange(columnId, { kind: "range", min, max });
+  }
+
+  function applyDateDraft() {
+    const from = fromDraft.trim() || null;
+    const to = toDraft.trim() || null;
+    if (!from && !to) {
+      onChange(columnId, undefined);
+      return;
+    }
+    if (from && to && from > to) return;
+    onChange(columnId, { kind: "date", from, to });
+  }
+
+  const rangeHint =
+    dataMin != null && dataMax != null
+      ? `Data range: ${dataMin} – ${dataMax}`
+      : dataMin != null
+        ? `Min in data: ${dataMin}`
+        : dataMax != null
+          ? `Max in data: ${dataMax}`
+          : "No numeric values in view";
+
+  const dateHint =
+    dateMin && dateMax
+      ? `Data range: ${dateMin} – ${dateMax}`
+      : dateMin
+        ? `Earliest in data: ${dateMin}`
+        : dateMax
+          ? `Latest in data: ${dateMax}`
+          : "No dates in view";
+
+  const filterTitle =
+    mode === "range"
+      ? `Range filter · ${label}`
+      : mode === "date"
+        ? `Date filter · ${label}`
+        : `Filter by ${label}`;
+
+  return (
+    <div ref={rootRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-haspopup="true"
+        aria-label={`Filter ${label}`}
+        title={`Filter ${label}`}
+        className={`inline-flex size-5 items-center justify-center rounded ${
+          isActive
+            ? "bg-[#245236] text-[#FEED01]"
+            : "text-[#245236]/55 hover:bg-[#245236]/10 hover:text-[#245236]"
+        }`}
+      >
+        <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden="true">
+          <path
+            fill="currentColor"
+            d="M2 3.25h12l-4.5 5.25v3.25L6.5 13V8.5L2 3.25Z"
+          />
+        </svg>
+      </button>
+      {open ? (
+        <div className="absolute left-0 top-full z-30 mt-1 w-[min(16rem,calc(100vw-2rem))] rounded-lg border border-[#245236]/20 bg-white p-2.5 text-left normal-case tracking-normal shadow-lg">
+          <p className="mb-2 text-[11px] font-medium text-[#245236]/70">{filterTitle}</p>
+          {mode === "range" ? (
+            <div className="space-y-2">
+              <p className="text-[11px] text-[#245236]/60">{rangeHint}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-1 text-[11px] font-medium text-[#245236]/80">
+                  Min
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={minDraft}
+                    onChange={(e) => setMinDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") applyRangeDraft();
+                    }}
+                    placeholder={dataMin != null ? String(dataMin) : "Any"}
+                    className="w-full rounded-md border border-[#245236]/25 bg-white px-2 py-1.5 text-xs text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-medium text-[#245236]/80">
+                  Max
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={maxDraft}
+                    onChange={(e) => setMaxDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") applyRangeDraft();
+                    }}
+                    placeholder={dataMax != null ? String(dataMax) : "Any"}
+                    className="w-full rounded-md border border-[#245236]/25 bg-white px-2 py-1.5 text-xs text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                  />
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {isActive ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClear(columnId);
+                      setMinDraft("");
+                      setMaxDraft("");
+                    }}
+                    className="text-[11px] font-medium text-[#245236] underline-offset-2 hover:underline"
+                  >
+                    Clear
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyRangeDraft();
+                    setOpen(false);
+                  }}
+                  className="rounded-md bg-[#245236] px-2.5 py-1 text-[11px] font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          ) : mode === "date" ? (
+            <div className="space-y-2">
+              <p className="text-[11px] text-[#245236]/60">{dateHint}</p>
+              <div className="grid grid-cols-1 gap-2">
+                <label className="flex flex-col gap-1 text-[11px] font-medium text-[#245236]/80">
+                  From
+                  <input
+                    type="date"
+                    value={fromDraft}
+                    onChange={(e) => setFromDraft(e.target.value)}
+                    className="w-full rounded-md border border-[#245236]/25 bg-white px-2 py-1.5 text-xs text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-[11px] font-medium text-[#245236]/80">
+                  To
+                  <input
+                    type="date"
+                    value={toDraft}
+                    onChange={(e) => setToDraft(e.target.value)}
+                    className="w-full rounded-md border border-[#245236]/25 bg-white px-2 py-1.5 text-xs text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+                  />
+                </label>
+              </div>
+              <div className="flex items-center justify-between gap-2 pt-1">
+                {isActive ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClear(columnId);
+                      setFromDraft("");
+                      setToDraft("");
+                    }}
+                    className="text-[11px] font-medium text-[#245236] underline-offset-2 hover:underline"
+                  >
+                    Clear
+                  </button>
+                ) : (
+                  <span />
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    applyDateDraft();
+                    setOpen(false);
+                  }}
+                  className="rounded-md bg-[#245236] px-2.5 py-1 text-[11px] font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
+                >
+                  Apply
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <input
+                type="search"
+                value={valueSearch}
+                onChange={(e) => setValueSearch(e.target.value)}
+                placeholder="Search values…"
+                autoComplete="off"
+                className="mb-2 w-full rounded-md border border-[#245236]/25 bg-white px-2 py-1.5 text-xs text-[#245236] outline-none ring-[#245236]/40 focus:ring-2"
+              />
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={toggleSelectAllVisible}
+                  className="text-[11px] font-medium text-[#245236] underline-offset-2 hover:underline"
+                >
+                  {allVisibleSelected ? "Clear listed" : "Select listed"}
+                </button>
+                {isActive ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClear(columnId);
+                      setOpen(false);
+                    }}
+                    className="text-[11px] font-medium text-[#245236] underline-offset-2 hover:underline"
+                  >
+                    Clear filter
+                  </button>
+                ) : null}
+              </div>
+              <ul className="max-h-[min(40vh,14rem)] space-y-0.5 overflow-y-auto">
+                {visibleValues.length === 0 ? (
+                  <li className="px-2 py-1.5 text-xs text-[#245236]/60">No values</li>
+                ) : (
+                  visibleValues.map((value) => (
+                    <li key={value}>
+                      <label className="flex cursor-pointer items-start gap-2 rounded-md px-2 py-1 text-xs text-[#245236] hover:bg-[#FEED01]/25">
+                        <input
+                          type="checkbox"
+                          checked={effectiveSelected.has(value)}
+                          onChange={() => toggleValue(value)}
+                          className="mt-0.5 size-3.5 shrink-0 rounded border-[#245236]/30 text-[#245236] focus:ring-[#245236]/40"
+                        />
+                        <span className="min-w-0 break-words">{value}</span>
+                      </label>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function cloneFormData(source: FormData): FormData {
   const fd = new FormData();
   for (const [key, val] of source.entries()) {
@@ -270,7 +855,6 @@ function buildCreateInventorySummary(
     { label: "Tallying", value: fdCell(fd.get("tallying")) },
     { label: "Pricing", value: fdCell(fd.get("pricing")) },
     { label: "Stickering", value: fdCell(fd.get("stickering")) },
-    { label: "Supply", value: fdCell(fd.get("supply")) },
     { label: "Invoice image/pdf (file)", value: fdCell(fd.get("invoice_image_file")) },
     { label: "Product images (file)", value: fdCell(fd.get("product_image_file")) },
     { label: "Debit note image (file)", value: fdCell(fd.get("debit_note_file")) },
@@ -323,6 +907,9 @@ export function InventoryManager({
     () => new Set(),
   );
   const [columnPrefsLoaded, setColumnPrefsLoaded] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<
+    Partial<Record<InventoryTableColumnId, InventoryColumnFilter>>
+  >({});
 
   useEffect(() => {
     setHiddenColumnIds(readHiddenInventoryColumns());
@@ -427,7 +1014,7 @@ export function InventoryManager({
 
   async function runWorkflowStatusUpdate(
     rowId: string,
-    field: "tallying" | "pricing" | "stickering" | "supply",
+    field: "tallying" | "pricing" | "stickering",
     value: string,
   ) {
     setRowError(null);
@@ -482,6 +1069,13 @@ export function InventoryManager({
           }),
         );
 
+  const columnFilterLookups = useMemo<InventoryColumnFilterLookups>(
+    () => ({ agentLabel, transportLabel, userLabel }),
+    // Labels are stable closures over current agents/transports/users props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [agents, transports, users],
+  );
+
   const filteredByAdminControls = filteredInventories.filter((row) => {
     if (showPaymentFields && adminPaymentStatusFilter) {
       const status = (row.payment_status ?? "").trim();
@@ -495,6 +1089,109 @@ export function InventoryManager({
     }
     return true;
   });
+
+  const activeColumnFilterIds = useMemo(
+    () =>
+      (Object.keys(columnFilters) as InventoryTableColumnId[]).filter((id) =>
+        isInventoryColumnFilterActive(columnFilters[id]),
+      ),
+    [columnFilters],
+  );
+  const hasActiveColumnFilters = activeColumnFilterIds.length > 0;
+
+  const filteredByColumnFilters = useMemo(() => {
+    if (!hasActiveColumnFilters) return filteredByAdminControls;
+    return filteredByAdminControls.filter((row) =>
+      activeColumnFilterIds.every((columnId) => {
+        const filter = columnFilters[columnId];
+        if (!filter || !isInventoryColumnFilterActive(filter)) return true;
+        return rowMatchesInventoryColumnFilter(row, columnId, filter, columnFilterLookups);
+      }),
+    );
+  }, [
+    filteredByAdminControls,
+    hasActiveColumnFilters,
+    activeColumnFilterIds,
+    columnFilters,
+    columnFilterLookups,
+  ]);
+
+  const columnFilterUniqueValues = useMemo(() => {
+    const map = {} as Partial<Record<InventoryTableColumnId, string[]>>;
+    for (const col of INVENTORY_TABLE_COLUMNS) {
+      if (!isInventoryListFilterColumn(col.id)) continue;
+      const rowsForUnique = filteredByAdminControls.filter((row) =>
+        activeColumnFilterIds.every((filterId) => {
+          if (filterId === col.id) return true;
+          const filter = columnFilters[filterId];
+          if (!filter || !isInventoryColumnFilterActive(filter)) return true;
+          return rowMatchesInventoryColumnFilter(row, filterId, filter, columnFilterLookups);
+        }),
+      );
+      const values = new Set<string>();
+      for (const row of rowsForUnique) {
+        values.add(inventoryColumnFilterValue(row, col.id, columnFilterLookups));
+      }
+      map[col.id] = [...values].sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }),
+      );
+    }
+    return map;
+  }, [filteredByAdminControls, activeColumnFilterIds, columnFilters, columnFilterLookups]);
+
+  const columnFilterNumericBounds = useMemo(() => {
+    const map = {} as Partial<
+      Record<InventoryTableColumnId, { min: number | null; max: number | null }>
+    >;
+    for (const col of INVENTORY_TABLE_COLUMNS) {
+      if (!isInventoryRangeFilterColumn(col.id)) continue;
+      const rowsForBounds = filteredByAdminControls.filter((row) =>
+        activeColumnFilterIds.every((filterId) => {
+          if (filterId === col.id) return true;
+          const filter = columnFilters[filterId];
+          if (!filter || !isInventoryColumnFilterActive(filter)) return true;
+          return rowMatchesInventoryColumnFilter(row, filterId, filter, columnFilterLookups);
+        }),
+      );
+      let min: number | null = null;
+      let max: number | null = null;
+      for (const row of rowsForBounds) {
+        const value = inventoryColumnNumericValue(row, col.id);
+        if (value == null) continue;
+        min = min == null ? value : Math.min(min, value);
+        max = max == null ? value : Math.max(max, value);
+      }
+      map[col.id] = { min, max };
+    }
+    return map;
+  }, [filteredByAdminControls, activeColumnFilterIds, columnFilters, columnFilterLookups]);
+
+  const columnFilterDateBounds = useMemo(() => {
+    const map = {} as Partial<
+      Record<InventoryTableColumnId, { min: string | null; max: string | null }>
+    >;
+    for (const col of INVENTORY_TABLE_COLUMNS) {
+      if (!isInventoryDateFilterColumn(col.id)) continue;
+      const rowsForBounds = filteredByAdminControls.filter((row) =>
+        activeColumnFilterIds.every((filterId) => {
+          if (filterId === col.id) return true;
+          const filter = columnFilters[filterId];
+          if (!filter || !isInventoryColumnFilterActive(filter)) return true;
+          return rowMatchesInventoryColumnFilter(row, filterId, filter, columnFilterLookups);
+        }),
+      );
+      let min: string | null = null;
+      let max: string | null = null;
+      for (const row of rowsForBounds) {
+        const value = inventoryColumnDateValue(row, col.id);
+        if (value == null) continue;
+        if (min == null || value < min) min = value;
+        if (max == null || value > max) max = value;
+      }
+      map[col.id] = { min, max };
+    }
+    return map;
+  }, [filteredByAdminControls, activeColumnFilterIds, columnFilters, columnFilterLookups]);
 
   const availableTableColumns = useMemo(
     () => INVENTORY_TABLE_COLUMNS.filter((col) => !col.adminOnly || showPaymentFields),
@@ -517,6 +1214,26 @@ export function InventoryManager({
 
   function showAllTableColumns() {
     setHiddenColumnIds(new Set());
+  }
+
+  function setColumnFilterSelection(
+    columnId: InventoryTableColumnId,
+    next: InventoryColumnFilter | undefined,
+  ) {
+    setColumnFilters((prev) => {
+      const copy = { ...prev };
+      if (next == null || !isInventoryColumnFilterActive(next)) delete copy[columnId];
+      else copy[columnId] = next;
+      return copy;
+    });
+  }
+
+  function clearColumnFilter(columnId: InventoryTableColumnId) {
+    setColumnFilterSelection(columnId, undefined);
+  }
+
+  function clearAllColumnFilters() {
+    setColumnFilters({});
   }
 
   function renderInventoryTableCell(row: InventoryRow, columnId: InventoryTableColumnId) {
@@ -585,18 +1302,6 @@ export function InventoryManager({
         ) : (
           (row.stickering ?? "—")
         );
-      case "supply":
-        return canManage || allowRestrictedEdit ? (
-          <InlineWorkflowStatusSelect
-            field="supply"
-            value={row.supply}
-            disabled={statusSavingKey === `${row.id}:supply`}
-            onChange={(value) => void runWorkflowStatusUpdate(row.id, "supply", value)}
-            className="w-[132px]"
-          />
-        ) : (
-          (row.supply ?? "—")
-        );
       case "invoice_amount":
         return formatMaybeNumber(row.invoice_amount);
       case "invoice_date":
@@ -618,12 +1323,12 @@ export function InventoryManager({
     }
   }
 
-  const inventoryFilterKey = `${listSearchLower}\0${adminPaymentStatusFilter}\0${adminDebitNoteFilter}`;
+  const inventoryFilterKey = `${listSearchLower}\0${adminPaymentStatusFilter}\0${adminDebitNoteFilter}\0${serializeInventoryColumnFilters(columnFilters)}`;
   const prevInventoryFilterKeyRef = useRef(inventoryFilterKey);
   useEffect(() => {
     const totalPages = Math.max(
       1,
-      Math.ceil(filteredByAdminControls.length / INVENTORY_RESULTS_PAGE_SIZE),
+      Math.ceil(filteredByColumnFilters.length / INVENTORY_RESULTS_PAGE_SIZE),
     );
     const filterChanged = prevInventoryFilterKeyRef.current !== inventoryFilterKey;
     prevInventoryFilterKeyRef.current = inventoryFilterKey;
@@ -631,17 +1336,17 @@ export function InventoryManager({
       if (filterChanged) return 1;
       return p > totalPages ? totalPages : p;
     });
-  }, [inventoryFilterKey, filteredByAdminControls.length]);
+  }, [inventoryFilterKey, filteredByColumnFilters.length]);
 
-  const inventoryResultsTotal = filteredByAdminControls.length;
+  const inventoryResultsTotal = filteredByColumnFilters.length;
   const inventoryResultsTotalPages = Math.max(
     1,
     Math.ceil(inventoryResultsTotal / INVENTORY_RESULTS_PAGE_SIZE),
   );
   const paginatedInventories = useMemo(() => {
     const start = (inventoryResultsPage - 1) * INVENTORY_RESULTS_PAGE_SIZE;
-    return filteredByAdminControls.slice(start, start + INVENTORY_RESULTS_PAGE_SIZE);
-  }, [filteredByAdminControls, inventoryResultsPage]);
+    return filteredByColumnFilters.slice(start, start + INVENTORY_RESULTS_PAGE_SIZE);
+  }, [filteredByColumnFilters, inventoryResultsPage]);
   const inventoryResultsRangeStart =
     inventoryResultsTotal === 0 ? 0 : (inventoryResultsPage - 1) * INVENTORY_RESULTS_PAGE_SIZE + 1;
   const inventoryResultsRangeEnd = Math.min(
@@ -650,16 +1355,16 @@ export function InventoryManager({
   );
 
   const inventoryNumericTotals = useMemo(
-    () => computeInventoryNumericTotals(filteredByAdminControls),
-    [filteredByAdminControls],
+    () => computeInventoryNumericTotals(filteredByColumnFilters),
+    [filteredByColumnFilters],
   );
 
   function handleExportExcel() {
-    if (filteredByAdminControls.length === 0) return;
+    if (filteredByColumnFilters.length === 0) return;
 
     const columns = ["Item Category", "Item Description", "Company", "Item Code"];
     const allowedInventoryNumbers = new Set(
-      filteredByAdminControls
+      filteredByColumnFilters
         .map((row) => row.inventory_number?.trim())
         .filter((v): v is string => Boolean(v)),
     );
@@ -684,8 +1389,8 @@ export function InventoryManager({
         <p className="text-sm text-[#245236]/75">
           {inventories.length === 0
             ? "No inventory rows yet."
-            : listSearchLower
-              ? `Showing ${filteredByAdminControls.length} of ${inventories.length} row${inventories.length === 1 ? "" : "s"} matching your filters.`
+            : listSearchLower || hasActiveColumnFilters || adminPaymentStatusFilter || adminDebitNoteFilter !== "all"
+              ? `Showing ${filteredByColumnFilters.length} of ${inventories.length} row${inventories.length === 1 ? "" : "s"} matching your filters.`
               : `${inventories.length} inventory row${inventories.length === 1 ? "" : "s"} in the list.`}
         </p>
         <button
@@ -952,11 +1657,20 @@ export function InventoryManager({
                 <button
                   type="button"
                   onClick={handleExportExcel}
-                  disabled={filteredByAdminControls.length === 0}
+                  disabled={filteredByColumnFilters.length === 0}
                   className="inline-flex items-center justify-center rounded-lg bg-[#245236] px-3 py-2 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a] disabled:opacity-50"
                 >
                   Export Excel
                 </button>
+                {hasActiveColumnFilters ? (
+                  <button
+                    type="button"
+                    onClick={clearAllColumnFilters}
+                    className="rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-3 py-2 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+                  >
+                    Clear column filters
+                  </button>
+                ) : null}
                 {listSearch.trim() ? (
                   <button
                     type="button"
@@ -1010,15 +1724,21 @@ export function InventoryManager({
           <p className="p-8 text-center text-sm text-zinc-500">
             No inventory rows yet.
           </p>
-        ) : filteredByAdminControls.length === 0 ? (
+        ) : filteredByColumnFilters.length === 0 ? (
           <p className="p-8 text-center text-sm text-zinc-500">
-            No rows match <span className="font-medium text-[#245236]">&quot;{listSearch.trim()}&quot;</span>.
-            Try a shorter or different term, or clear the search.
+            No rows match your filters
+            {listSearch.trim() ? (
+              <>
+                {" "}
+                for <span className="font-medium text-[#245236]">&quot;{listSearch.trim()}&quot;</span>
+              </>
+            ) : null}
+            . Try clearing search or column filters.
           </p>
         ) : (
           <>
             <InventoryTotalsBar
-              rowCount={filteredByAdminControls.length}
+              rowCount={filteredByColumnFilters.length}
               totals={inventoryNumericTotals}
             />
             <div className="divide-y divide-[#245236]/15 md:hidden">
@@ -1109,21 +1829,6 @@ export function InventoryManager({
                         <p className="text-[#245236]/85">{row.stickering ?? "—"}</p>
                       )}
                     </div>
-                    <div>
-                      <p className="text-xs text-[#245236]/70">Supply</p>
-                      {canManage || allowRestrictedEdit ? (
-                        <InlineWorkflowStatusSelect
-                          field="supply"
-                          value={row.supply}
-                          disabled={statusSavingKey === `${row.id}:supply`}
-                          onChange={(value) =>
-                            void runWorkflowStatusUpdate(row.id, "supply", value)
-                          }
-                        />
-                      ) : (
-                        <p className="text-[#245236]/85">{row.supply ?? "—"}</p>
-                      )}
-                    </div>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-1">
@@ -1169,7 +1874,24 @@ export function InventoryManager({
                 <tr>
                   {visibleTableColumns.map((col) => (
                     <th key={col.id} className="px-4 py-3">
-                      {col.label}
+                      <div className="flex items-center gap-1.5">
+                        <span>{col.label}</span>
+                        {!INVENTORY_NO_FILTER_COLUMNS.has(col.id) ? (
+                          <InventoryExcelColumnFilter
+                            columnId={col.id}
+                            label={col.label}
+                            mode={inventoryColumnFilterMode(col.id)}
+                            uniqueValues={columnFilterUniqueValues[col.id] ?? []}
+                            filter={columnFilters[col.id]}
+                            dataMin={columnFilterNumericBounds[col.id]?.min ?? null}
+                            dataMax={columnFilterNumericBounds[col.id]?.max ?? null}
+                            dateMin={columnFilterDateBounds[col.id]?.min ?? null}
+                            dateMax={columnFilterDateBounds[col.id]?.max ?? null}
+                            onChange={setColumnFilterSelection}
+                            onClear={clearColumnFilter}
+                          />
+                        ) : null}
+                      </div>
                     </th>
                   ))}
                   <th className="px-4 py-3 text-right">Actions</th>
@@ -1598,20 +2320,6 @@ function InventoryFormFields({
         </select>
       </label>
 
-      <label className={fieldLabelClass}>
-        Supply
-        <select
-          name="supply"
-          defaultValue={v?.supply ?? ""}
-          className={fieldInputClass}
-        >
-          <option value="">—</option>
-          <option value="PENDING">PENDING</option>
-          <option value="IN PROGRESS">IN PROGRESS</option>
-          <option value="DONE">DONE</option>
-        </select>
-      </label>
-
       <input
         type="hidden"
         name="invoice_image_url"
@@ -1877,7 +2585,7 @@ function InlineWorkflowStatusSelect({
   onChange,
   className,
 }: {
-  field: "tallying" | "pricing" | "stickering" | "supply";
+  field: "tallying" | "pricing" | "stickering";
   value: string | null | undefined;
   disabled?: boolean;
   onChange: (value: string) => void;
