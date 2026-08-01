@@ -11,6 +11,7 @@ const adminLinks = [
   { href: "/users", label: "Users" },
   { href: "/agents", label: "Agents" },
   { href: "/inventory", label: "Invoices" },
+  { href: "/inventory/hidden", label: "Hidden invoices" },
   { href: "/brands", label: "Brands" },
   { href: "/products", label: "Products" },
   { href: "/style", label: "Style" },
@@ -31,6 +32,7 @@ export default async function TopNav() {
         : role === "user"
           ? [
               { href: "/inventory", label: "Invoices" },
+              { href: "/inventory/hidden", label: "Hidden invoices" },
               { href: "/stock", label: "Inventory" },
             ]
           : [];

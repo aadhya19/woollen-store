@@ -498,6 +498,7 @@ export async function createInventory(
 
   if (error) return { error: mapSupabaseError(error.message) };
   revalidatePath("/inventory");
+  revalidatePath("/inventory/hidden");
   return { error: null };
 }
 
@@ -537,6 +538,7 @@ export async function deleteInventory(id: string): Promise<ActionResult> {
   if (deleteErr) return { error: mapSupabaseError(deleteErr.message) };
 
   revalidatePath("/inventory");
+  revalidatePath("/inventory/hidden");
   revalidatePath("/stock");
   return { error: null };
 }
@@ -664,6 +666,7 @@ export async function updateInventory(
 
     if (error) return { error: mapSupabaseError(error.message) };
     revalidatePath("/inventory");
+    revalidatePath("/inventory/hidden");
     return { error: null };
   }
 
@@ -691,6 +694,7 @@ export async function updateInventory(
 
   if (error) return { error: mapSupabaseError(error.message) };
   revalidatePath("/inventory");
+  revalidatePath("/inventory/hidden");
   return { error: null };
 }
 
@@ -724,6 +728,32 @@ export async function updateInventoryWorkflowStatus(input: {
 
   if (error) return { error: mapSupabaseError(error.message) };
   revalidatePath("/inventory");
+  revalidatePath("/inventory/hidden");
   return { error: null };
 }
 
+
+export async function setInventoryHidden(
+  id: string,
+  hidden: boolean,
+): Promise<ActionResult> {
+  const authError = await requireActionRole(["admin", "manager"]);
+  if (authError) return { error: authError };
+
+  const trimmedId = id?.toString().trim();
+  if (!trimmedId) return { error: "Missing inventory id" };
+
+  const supabase = createSupabase();
+  const { error } = await supabase
+    .from("Inventory")
+    .update({
+      hidden: Boolean(hidden),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", trimmedId);
+
+  if (error) return { error: mapSupabaseError(error.message) };
+  revalidatePath("/inventory");
+  revalidatePath("/inventory/hidden");
+  return { error: null };
+}

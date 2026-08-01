@@ -131,23 +131,31 @@ export async function createStock(formData: FormData): Promise<ActionResult> {
   const { refs, error: refErr } = parseStockRefsFromForm(formData);
   if (refErr) return { error: refErr };
 
+  const { n: requestedBarcode, error: barcodeErr } = parseOptionalInt(
+    formData.get("barcode"),
+  );
+  if (barcodeErr) return { error: "Barcode must be a whole number" };
+
   const supabase = createSupabase();
 
-  const { data: maxBarcodeRow, error: maxBarcodeErr } = await supabase
-    .from("Stock")
-    .select("barcode")
-    .not("barcode", "is", null)
-    .order("barcode", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  let barcode = requestedBarcode;
+  if (barcode == null) {
+    const { data: maxBarcodeRow, error: maxBarcodeErr } = await supabase
+      .from("Stock")
+      .select("barcode")
+      .not("barcode", "is", null)
+      .order("barcode", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (maxBarcodeErr) return { error: mapSupabaseError(maxBarcodeErr.message) };
+    if (maxBarcodeErr) return { error: mapSupabaseError(maxBarcodeErr.message) };
 
-  const maxExisting =
-    typeof maxBarcodeRow?.barcode === "number" && Number.isFinite(maxBarcodeRow.barcode)
-      ? maxBarcodeRow.barcode
-      : null;
-  const barcode = Math.max(maxExisting ?? 0, STOCK_BARCODE_FLOOR) + 1;
+    const maxExisting =
+      typeof maxBarcodeRow?.barcode === "number" && Number.isFinite(maxBarcodeRow.barcode)
+        ? maxBarcodeRow.barcode
+        : null;
+    barcode = Math.max(maxExisting ?? 0, STOCK_BARCODE_FLOOR) + 1;
+  }
 
   const { error } = await supabase.from("Stock").insert({
     barcode,
@@ -230,6 +238,7 @@ export async function duplicateStock(id: string): Promise<ActionResult> {
 }
 
 type StockParsed = StockRefs & {
+  barcode: number | null;
   stock_number: string | null;
   inventory_number: string | null;
   HSN_code: string | null;
@@ -257,6 +266,9 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
   const GST_group = emptyToNull(formData.get("GST_group"));
   const size = emptyToNull(formData.get("size"));
 
+  const { n: barcode, error: barcodeErr } = parseOptionalInt(formData.get("barcode"));
+  if (barcodeErr) return { error: "Barcode must be a whole number" };
+
   const { n: cost_price, error: costErr } = parseOptionalFloat(
     formData.get("cost_price"),
   );
@@ -276,6 +288,7 @@ export async function updateStock(formData: FormData): Promise<ActionResult> {
   if (refErr) return { error: refErr };
 
   const parsed: StockParsed = {
+    barcode,
     stock_number,
     inventory_number,
     ...refs,

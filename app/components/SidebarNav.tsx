@@ -14,6 +14,7 @@ const adminNav = [
   { href: "/users", label: "Users" },
   { href: "/agents", label: "Agents" },
   { href: "/inventory", label: "Invoices" },
+  { href: "/inventory/hidden", label: "Hidden invoices" },
   { href: "/brands", label: "Brands" },
   { href: "/products", label: "Products" },
   { href: "/style", label: "Style" },
@@ -30,6 +31,7 @@ const navByRole: Record<UserRole, Array<{ href: string; label: string }>> = {
   user: [
     { href: "/", label: "Dashboard" },
     { href: "/inventory", label: "Invoices" },
+    { href: "/inventory/hidden", label: "Hidden invoices" },
     { href: "/stock", label: "Inventory" },
   ],
 };
@@ -46,9 +48,17 @@ export default function SidebarNav({ role, mobile = false }: SidebarNavProps) {
       aria-label="Primary navigation"
     >
       {links.map((link) => {
-        const active =
-          pathname === link.href ||
-          (link.href !== "/" && pathname.startsWith(`${link.href}/`));
+        const exact = pathname === link.href;
+        const nested =
+          link.href !== "/" &&
+          pathname.startsWith(`${link.href}/`) &&
+          !links.some(
+            (other) =>
+              other.href !== link.href &&
+              other.href.startsWith(`${link.href}/`) &&
+              (pathname === other.href || pathname.startsWith(`${other.href}/`)),
+          );
+        const active = exact || nested;
         return (
           <Link
             key={link.href}

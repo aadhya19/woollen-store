@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import {
   createInventory,
   deleteInventory,
+  setInventoryHidden,
   updateInventory,
   updateInventoryWorkflowStatus,
 } from "./actions";
@@ -30,6 +32,8 @@ type Props = {
   showPaymentFields?: boolean;
   /** Employee: can edit existing rows but only fields that are still empty (server enforces). */
   allowRestrictedEdit?: boolean;
+  /** Main list shows non-hidden rows; hidden list shows only soft-hidden invoices. */
+  listMode?: "active" | "hidden";
 };
 
 const INVENTORY_RESULTS_PAGE_SIZE = 25;
@@ -878,10 +882,12 @@ export function InventoryManager({
   canManage,
   showPaymentFields = false,
   allowRestrictedEdit = false,
+  listMode = "active",
 }: Props) {
   const router = useRouter();
   const isEmployee = !canManage && allowRestrictedEdit;
   console.log("isEmployee", isEmployee);
+  const showingHidden = listMode === "hidden";
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -898,7 +904,9 @@ export function InventoryManager({
   >(null);
   const [createConfirmSubmitting, setCreateConfirmSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [hidingId, setHidingId] = useState<string | null>(null);
   const [, startDelete] = useTransition();
+  const [, startHide] = useTransition();
   const [deleteConfirmRow, setDeleteConfirmRow] = useState<InventoryRow | null>(null);
   const [deleteFeedbackMessage, setDeleteFeedbackMessage] = useState<string | null>(null);
   const [inventoryResultsPage, setInventoryResultsPage] = useState(1);
@@ -1010,6 +1018,22 @@ export function InventoryManager({
   function runDelete(row: InventoryRow) {
     if (!canManage) return;
     setDeleteConfirmRow(row);
+  }
+
+  function runToggleHidden(row: InventoryRow) {
+    if (!canManage) return;
+    setRowError(null);
+    setHidingId(row.id);
+    startHide(async () => {
+      const r = await setInventoryHidden(row.id, !showingHidden);
+      if (r.error) {
+        setRowError(r.error);
+        setHidingId(null);
+        return;
+      }
+      setHidingId(null);
+      router.refresh();
+    });
   }
 
   async function runWorkflowStatusUpdate(
@@ -1388,23 +1412,44 @@ export function InventoryManager({
       <div className="flex flex-col gap-3 rounded-xl border border-[#245236]/20 bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-[#245236]/75">
           {inventories.length === 0
-            ? "No inventory rows yet."
+            ? showingHidden
+              ? "No hidden invoices."
+              : "No inventory rows yet."
             : listSearchLower || hasActiveColumnFilters || adminPaymentStatusFilter || adminDebitNoteFilter !== "all"
               ? `Showing ${filteredByColumnFilters.length} of ${inventories.length} row${inventories.length === 1 ? "" : "s"} matching your filters.`
               : `${inventories.length} inventory row${inventories.length === 1 ? "" : "s"} in the list.`}
         </p>
-        <button
-          type="button"
-          onClick={() => {
-            setFormError(null);
-            setRowError(null);
-            setEditingId(null);
-            setIsCreateOpen(true);
-          }}
-          className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
-        >
-          Add new
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {showingHidden ? (
+            <Link
+              href="/inventory"
+              className="inline-flex h-[38px] items-center justify-center rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-4 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+            >
+              Back to invoices
+            </Link>
+          ) : (
+            <Link
+              href="/inventory/hidden"
+              className="inline-flex h-[38px] items-center justify-center rounded-lg border border-[#245236]/30 bg-[#FEED01]/35 px-4 text-sm font-medium text-[#245236] hover:bg-[#FEED01]/55"
+            >
+              Hidden invoices
+            </Link>
+          )}
+          {!showingHidden ? (
+            <button
+              type="button"
+              onClick={() => {
+                setFormError(null);
+                setRowError(null);
+                setEditingId(null);
+                setIsCreateOpen(true);
+              }}
+              className="inline-flex h-[38px] items-center justify-center rounded-lg bg-[#245236] px-4 text-sm font-semibold text-[#FEED01] hover:bg-[#1c3f2a]"
+            >
+              Add new
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <Modal
@@ -1722,7 +1767,7 @@ export function InventoryManager({
       <div className="overflow-hidden rounded-xl border border-[#245236]/20 bg-white shadow-sm">
         {inventories.length === 0 ? (
           <p className="p-8 text-center text-sm text-zinc-500">
-            No inventory rows yet.
+            {showingHidden ? "No hidden invoices." : "No inventory rows yet."}
           </p>
         ) : filteredByColumnFilters.length === 0 ? (
           <p className="p-8 text-center text-sm text-zinc-500">
@@ -1847,14 +1892,30 @@ export function InventoryManager({
                           Edit
                         </button>
                         {canManage ? (
-                          <button
-                            type="button"
-                            onClick={() => runDelete(row)}
-                            disabled={deletingId === row.id}
-                            className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
-                          >
-                            {deletingId === row.id ? "Deleting..." : "Delete"}
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => runToggleHidden(row)}
+                              disabled={hidingId === row.id || deletingId === row.id}
+                              className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:opacity-60"
+                            >
+                              {hidingId === row.id
+                                ? showingHidden
+                                  ? "Unhiding..."
+                                  : "Hiding..."
+                                : showingHidden
+                                  ? "Unhide"
+                                  : "Hide"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => runDelete(row)}
+                              disabled={deletingId === row.id || hidingId === row.id}
+                              className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
+                            >
+                              {deletingId === row.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </>
                         ) : null}
                       </>
                     ) : (
@@ -1924,14 +1985,30 @@ export function InventoryManager({
                                 Edit
                               </button>
                               {canManage ? (
-                                <button
-                                  type="button"
-                                  onClick={() => runDelete(row)}
-                                  disabled={deletingId === row.id}
-                                  className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
-                                >
-                                  {deletingId === row.id ? "Deleting..." : "Delete"}
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => runToggleHidden(row)}
+                                    disabled={hidingId === row.id || deletingId === row.id}
+                                    className="rounded-md px-2 py-1 text-xs font-medium text-[#245236] underline-offset-2 hover:underline disabled:opacity-60"
+                                  >
+                                    {hidingId === row.id
+                                      ? showingHidden
+                                        ? "Unhiding..."
+                                        : "Hiding..."
+                                      : showingHidden
+                                        ? "Unhide"
+                                        : "Hide"}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => runDelete(row)}
+                                    disabled={deletingId === row.id || hidingId === row.id}
+                                    className="rounded-md px-2 py-1 text-xs font-medium text-red-700 underline-offset-2 hover:underline disabled:opacity-60"
+                                  >
+                                    {deletingId === row.id ? "Deleting..." : "Delete"}
+                                  </button>
+                                </>
                               ) : null}
                             </div>
                           ) : (

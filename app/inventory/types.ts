@@ -28,6 +28,8 @@ export type InventoryRow = {
   payment_mode: string | null;
   payment_status: string | null;
   debit_note: string | null;
+  /** Soft-hide from the main invoices list; default false in DB. */
+  hidden: boolean | null;
 };
 
 export type AgentLookupRow = {

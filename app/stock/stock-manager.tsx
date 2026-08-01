@@ -80,6 +80,7 @@ function buildCreateStockSummary(
     { label: "Style", value: styleName },
     { label: "Fabric", value: fabricName },
     { label: "Barcode", value: emptyToDash(fd.get("barcode")) },
+    { label: "Article number", value: emptyToDash(fd.get("stock_number")) },
     { label: "Inventory number", value: emptyToDash(fd.get("inventory_number")) },
     { label: "Size", value: sizeLabel },
     { label: "Pieces", value: emptyToDash(fd.get("pieces")) },
@@ -1034,20 +1035,17 @@ export function StockManager({
                           Select
                         </label>
                       ) : null}
-                      <div className="grid grid-cols-3 gap-2 text-center sm:gap-3">
+                      <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-xs text-[#245236]/70">Barcode</p>
                           <StockBarcodeCell barcode={row.barcode} />
                         </div>
                         <div>
-                          <p className="text-xs text-[#245236]/70">Inv #</p>
-                          <p className="text-sm font-medium text-[#245236]">
-                            {row.inventory_number ?? "—"}
+                          <p className="text-xs text-[#245236]/70">Article number</p>
+                          <p className="text-[#245236]/85">
+                            {row.stock_number?.trim() || "—"}
                           </p>
                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3 text-sm">
                         <div>
                           <p className="text-xs text-[#245236]/70">Product</p>
                           <p className="text-[#245236]/85">
@@ -1160,7 +1158,7 @@ export function StockManager({
                         </th>
                       ) : null}
                       <th className="px-4 py-3">Barcode</th>
-                      <th className="px-4 py-3">Inventory #</th>
+                      <th className="px-4 py-3">Article number</th>
                       <th className="px-4 py-3">Product</th>
                       <th className="px-4 py-3">Brand</th>
                       <th className="px-4 py-3">Style</th>
@@ -1194,8 +1192,8 @@ export function StockManager({
                           <td className="px-4 py-3">
                             <StockBarcodeCell barcode={row.barcode} table />
                           </td>
-                          <td className="px-4 py-3 font-medium tabular-nums text-[#245236]/90">
-                            {row.inventory_number ?? "—"}
+                          <td className="px-4 py-3 text-[#245236]/80">
+                            {row.stock_number?.trim() || "—"}
                           </td>
                           <td className="px-4 py-3 text-[#245236]/80">
                             {productById.get(row.product ?? "")?.product_name?.trim() ||
@@ -1634,7 +1632,7 @@ function StockFormFields({
   sizes: SizeOption[];
   inventoryChoices: InventoryStockContext[];
   lockedInventoryNumber?: string | null;
-  /** Next barcode shown read-only when creating (server assigns the value on save). */
+  /** Next barcode prefilled when creating; editable, and the server assigns one if cleared. */
   prefillBarcode?: number;
   restrictEditToEmptyFields?: boolean;
 }) {
@@ -1710,16 +1708,27 @@ function StockFormFields({
             name="barcode"
             label="Barcode"
             value={String(prefillBarcode)}
-            placeholder=""
-            readOnly
+            placeholder={String(prefillBarcode)}
+            inputMode="numeric"
           />
         ) : null}
         {mode === "edit" && v ? (
-          <ReadonlyFormField
+          <FormInput
+            name="barcode"
             label="Barcode"
-            value={v.barcode != null ? String(v.barcode) : "Not assigned"}
+            value={toText(v.barcode)}
+            placeholder="15000"
+            inputMode="numeric"
+            readOnly={ro && stkHasNum(v.barcode)}
           />
         ) : null}
+        <FormInput
+          name="stock_number"
+          label="Article number"
+          value={v?.stock_number}
+          placeholder="A-1001"
+          readOnly={ro && stkHasStr(v?.stock_number)}
+        />
         {inventoryLocked ? (
           <ReadonlyFormField
             label="Inventory"
